@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  flask-app:
+  flask-api:
     image: python:3.8-slim-buster
-    container_name: flask_app
+    container_name: flask_api
     working_dir: /app
     volumes:
       - ./api:/app
@@ -18,14 +18,14 @@ services:
     env_file:
       - ./api/.env
     depends_on:
-      - mongodb
+      - mongo
     command: >
       bash -c "pip install --no-cache-dir -r requirements.txt &&
                python -m flask run --host=0.0.0.0"
   
-  mongodb:
+  mongo:
     image: mongo:4.4
-    container_name: mongodb
+    container_name: mongo
     environment:
       - MONGO_INITDB_ROOT_USERNAME=admin
       - MONGO_INITDB_ROOT_PASSWORD=secret
