@@ -1,0 +1,32 @@
+name: Database-CI
+on: [push, pull_request]
+
+jobs:
+  test-database:
+    name: Test Database
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up MongoDB
+        uses: supercharge/mongodb-github-action@1.10.0
+        with:
+          mongodb-version: 'latest'
+          mongodb-username: admin
+          mongodb-password: secret
+          mongodb-db: bathroom_map
+
+      - name: Test MongoDB initialization
+        run: |
+          cd database
+          mongosh --username admin --password secret --authenticationDatabase admin \
+            --eval "load('init/seed_data.js')" \
+            --verbose
+          
+          # Verify bathrooms were created
+          mongosh --username admin --password secret --authenticationDatabase admin \
+            --eval "db = db.getSiblingDB('bathroom_map'); db.bathrooms.find().toArray()" \
+            --quiet | grep "Kimmel" 
