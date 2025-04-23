@@ -2,8 +2,11 @@ version: '3.8'
 
 services:
   flask-app:
-    build: ./api
+    image: python:3.8-slim-buster
     container_name: flask_app
+    working_dir: /app
+    volumes:
+      - ./api:/app
     ports:
       - "10000:5000"
     environment:
@@ -16,13 +19,16 @@ services:
       - ./api/.env
     depends_on:
       - mongodb
+    command: >
+      bash -c "pip install --no-cache-dir -r requirements.txt &&
+               python -m flask run --host=0.0.0.0"
   
   mongodb:
+    image: mongo:4.4
+    container_name: mongodb
     environment:
       - MONGO_INITDB_ROOT_USERNAME=admin
       - MONGO_INITDB_ROOT_PASSWORD=secret
-    build: ./database
-    container_name: mongodb
     ports:
       - "27017:27017"
     volumes:
