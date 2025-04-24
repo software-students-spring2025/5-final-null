@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  flask-api:
+    image: python:3.8-slim-buster
+    container_name: flask_api
+    working_dir: /app
+    volumes:
+      - ./api:/app
+    ports:
+      - "10000:5000"
+    environment:
+      - MONGO_DBNAME=bathroom_map
+      - MONGO_URI=mongodb://admin:secret@mongodb:27017
+      - FLASK_APP=app.py
+      - FLASK_ENV=development
+      - FLASK_PORT=5000
+    env_file:
+      - ./api/.env
+    depends_on:
+      - mongo
+    command: >
+      bash -c "pip install --no-cache-dir -r requirements.txt &&
+               python -m flask run --host=0.0.0.0"
+  
+  mongo:
+    image: mongo:4.4
+    container_name: mongo
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=secret
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+volumes:
+  mongo-data:
+  
+networks:
+  app-network:
+    driver: bridge 
