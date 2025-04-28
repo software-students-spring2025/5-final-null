@@ -8,13 +8,12 @@ services:
     volumes:
       - ./web-app:/app
     ports:
-      - "10000:5000"
+      - "5001:5001"
     environment:
       - MONGO_DBNAME=bathroom_map
       - MONGO_URI=mongodb://admin:secret@mongo:27017
       - FLASK_APP=app.py
       - FLASK_ENV=development
-      - FLASK_PORT=5000
       - JWT_SECRET_KEY=jwt_secret_key_dev
     env_file:
       - ./web-app/.env
@@ -22,7 +21,7 @@ services:
       - mongo
     command: >
       bash -c "pip install --no-cache-dir -r requirements.txt &&
-               python -m flask run --host=0.0.0.0"
+               python -m flask run --host=0.0.0.0 --port=5001"
   
   mongo:
     image: mongo:4.4
