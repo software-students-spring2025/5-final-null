@@ -178,7 +178,8 @@ def create_app():
                 is_accessible=data.get('is_accessible', False),
                 gender=data.get('gender', 'all')
             )
-            
+            bathroom_doc['created_by'] = get_jwt_identity()
+
             # Insert into database
             result = get_db().bathrooms.insert_one(bathroom_doc)
             return jsonify({
@@ -405,6 +406,28 @@ def create_app():
         except PyMongoError as e:
             return jsonify({"error": str(e)}), 500
     
+    @app.route("/profile", methods=["GET"])
+    @jwt_required()
+    def profile():
+        """Show the user's profile page with their requests and reviews."""
+        user_id = get_jwt_identity()
+        db = get_db()
+
+        user = db.users.find_one({"_id": ObjectId(user_id)})
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        bathroom_requests = list(db.bathrooms.find({"created_by": user_id}))
+        reviews = list(db.reviews.find({"user_id": user_id}))
+
+        return render_template(
+            "profile.html",
+            user=user,
+            bathroom_requests=bathroom_requests,
+            reviews=reviews
+        )
+
+
     return app
 
 if __name__ == "__main__":
