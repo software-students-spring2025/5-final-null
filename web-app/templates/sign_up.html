@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stall Street Journal - Sign Up</title>
+  <style>
+    .logo {
+        width: 50% !important;       
+        height: auto;
+        display: block;
+        margin-bottom: 20px;
+        background-color: red;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Arial', sans-serif;
+      background-color: #f0f0f0;
+    }
+
+    .container {
+      display: flex;
+      height: 100vh;
+    }
+
+    .left-pane {
+      background-color: #1e3554;
+      width: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .form-box {
+      background-color: #f7eedd;
+      padding: 40px 30px;
+      border-radius: 40px;
+      width: 80%;
+      max-width: 400px;
+    }
+
+    .form-box h2 {
+      text-align: center;
+      margin-bottom: 30px;
+      color: #000;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      font-weight: bold;
+      font-size: 14px;
+      margin-bottom: 5px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+    }
+
+    .form-box button {
+      width: 100%;
+      padding: 12px;
+      background-color: white;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+
+    .login-link {
+      margin-top: 20px;
+      text-align: center;
+      font-size: 14px;
+    }
+
+    .right-pane {
+      background-color: #f7eedd;
+      width: 50%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .logo {
+      width: 100px;
+      margin-bottom: 20px;
+    }
+
+    .title {
+      font-size: 28px;
+      font-weight: bold;
+      text-align: center;
+      color: #1e3554;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="left-pane">
+      <div class="form-box">
+        <h2>Unlock the Stall Street</h2>
+        <form action="/signup" method="POST"> <!-- Flask route -->
+          <div class="form-group">
+            <label for="name">name</label>
+            <input type="text" id="name" name="name" required />
+          </div>
+          <div class="form-group">
+            <label for="email">email</label>
+            <input type="email" id="email" name="email" required />
+          </div>
+          <div class="form-group">
+            <label for="password">password</label>
+            <input type="password" id="password" name="password" required />
+          </div>
+          <button type="submit">Sign Up</button>
+        </form>
+        <div class="login-link">
+          Already have an account? <a href="login.html">Login Here</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="right-pane">
+      <img class="logo" src="logo.png" />
+    </div>
+  </div>
+</body>
+</html>
