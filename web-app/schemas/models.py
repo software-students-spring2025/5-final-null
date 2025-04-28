@@ -1,11 +1,32 @@
-"""Database models for the application."""
+"""Database models for the bathroom map application."""
 from typing import Dict, List, Any, Optional
 from datetime import datetime
+from pymongo import MongoClient, GEOSPHERE
+from flask import current_app
+
+def init_db(app) -> None:
+    """Initialize database with required indexes.
+    
+    Args:
+        app: The Flask application instance
+    """
+    with app.app_context():
+        client = MongoClient(current_app.config['MONGO_URI'])
+        db = client[current_app.config['MONGO_DBNAME']]
+        
+        # Create geospatial index for bathroom locations
+        db.bathrooms.create_index([("location", GEOSPHERE)])
+        
+        # Create indexes for other collections
+        db.reviews.create_index("bathroom_id")
+        db.users.create_index("email", unique=True)
+
 
 # Typing aliases for clarity
 BathroomDocument = Dict[str, Any]
 ReviewDocument = Dict[str, Any]
 UserDocument = Dict[str, Any]
+
 
 class Bathroom:
     """Bathroom model representing a restroom location."""
@@ -84,4 +105,32 @@ class Review:
             "best_for": best_for,
             "comment": comment,
             "created_at": datetime.utcnow()
+        }
+
+
+class User:
+    """User model for application users."""
+    
+    @staticmethod
+    def create_document(
+        email: str,
+        password_hash: str,
+        name: str,
+    ) -> UserDocument:
+        """Create a new user document.
+        
+        Args:
+            email: User's email address
+            password_hash: Hashed password
+            name: User's display name
+            
+        Returns:
+            A user document ready for database insertion
+        """
+        return {
+            "email": email,
+            "password_hash": password_hash,
+            "name": name,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
         } 
