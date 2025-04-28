@@ -78,6 +78,11 @@ def create_app():
             return jsonify({"message": "User registered successfully", "access_token": access_token}), 201
         except PyMongoError as e:
             return jsonify({"error": str(e)}), 500
+
+    @app.route("/login", methods=["GET"])
+    def login_page():
+        """Render the login page."""
+        return render_template("login.html")
     
     @app.route("/api/auth/login", methods=["POST"])
     def login():
@@ -96,6 +101,11 @@ def create_app():
         # Create token
         access_token = create_access_token(identity=str(user['_id']))
         return jsonify({"access_token": access_token}), 200
+
+    @app.route("/login", methods=["GET"])
+    def login_page():
+        """Render the login page."""
+        return render_template("login.html")
     
     @app.route("/api/users/me", methods=["GET"])
     @jwt_required()
