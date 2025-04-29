@@ -182,6 +182,32 @@ def create_app():
         user.pop('password_hash', None)
         return jsonify({"user": json_util.dumps(user)}), 200
     
+    @app.route("/bathroom/<bathroom_id>", methods=["GET"])
+    @jwt_required(optional=True)
+    def view_bathroom_page(bathroom_id):
+        """Render the detailed bathroom page with reviews."""
+        try:
+            db = get_db()
+
+            bathroom = db.bathrooms.find_one({"_id": ObjectId(bathroom_id)})
+            if not bathroom:
+                abort(404)
+
+            reviews = list(db.reviews.find({"bathroom_id": bathroom_id}))
+            
+            user_id = get_jwt_identity()
+            logged_in = user_id is not None
+
+            return render_template(
+                "view_bathroom.html",
+                bathroom=bathroom,
+                reviews=reviews,
+                logged_in=logged_in
+            )
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+
     @app.route("/api/bathrooms", methods=["GET"])
     def get_bathrooms():
         """Get all bathrooms."""

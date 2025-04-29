@@ -97,29 +97,9 @@
     }
 
     li {
-      margin-bottom: 10px;
-    }
-
-    .status {
-      display: inline-block;
-      padding: 5px 12px;
-      border-radius: 12px;
-      color: white;
-      font-size: 14px;
-      font-weight: 600;
-      margin-left: 10px;
-    }
-
-    .pending {
-      background-color: #2d3e58;
-    }
-
-    .approved {
-      background-color: #5bc0eb;
-    }
-
-    .denied {
-      background-color: #4f2c2c;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #f7eedd;
+      padding-bottom: 10px;
     }
   </style>
 </head>
@@ -127,8 +107,8 @@
 <body>
   <nav>
     <ul>
-        <li><a href="{{ url_for('home') }}">Map</a></li>
-        <li><a href="#" onclick="handleLogout()">Logout</a></li>
+      <li><a href="{{ url_for('home') }}">Map</a></li>
+      <li><a href="#" onclick="handleLogout()">Logout</a></li>
     </ul>
   </nav>
 
@@ -139,19 +119,60 @@
       <h3>{{ reviews|length }} ratings across campus</h3>
       <ul>
         {% for review in reviews %}
-          <li>Bathroom ID: {{ review.bathroom_id }}</li>
+          <li>
+            <div><strong>Bathroom ID:</strong> {{ review.bathroom_id }}</div>
+
+            <div><strong>Cleanliness:</strong>
+              {% for _ in range(review.ratings.cleanliness) %}
+                ⭐
+              {% endfor %}
+              ({{ review.ratings.cleanliness }}/5)
+            </div>
+
+            <div><strong>Privacy:</strong>
+              {% for _ in range(review.ratings.privacy) %}
+                ⭐
+              {% endfor %}
+              ({{ review.ratings.privacy }}/5)
+            </div>
+
+            <div><strong>Accessibility:</strong>
+              {% for _ in range(review.ratings.accessibility) %}
+                ⭐
+              {% endfor %}
+              ({{ review.ratings.accessibility }}/5)
+            </div>
+
+            {% if review.comment %}
+              <div style="margin-top: 5px;"><strong>Comment:</strong> {{ review.comment }}</div>
+            {% else %}
+              <div style="margin-top: 5px;"><strong>Comment:</strong> No comment left.</div>
+            {% endif %}
+          </li>
         {% else %}
           <li>No reviews yet.</li>
         {% endfor %}
       </ul>
     </div>
 
-    {% set level = (reviews|length // 5) + 1 %}
+    {# Creative titles based on number of reviews #}
+    {% set review_count = reviews|length %}
+
+    {% if review_count <= 1 %}
+      {% set title = "First-Time Flusher 🌱" %}
+    {% elif review_count <= 3 %}
+      {% set title = "Seasoned Flusher 🌊" %}
+    {% elif review_count <= 5 %}
+      {% set title = "Toilet Tactician 🎯🚽" %}
+    {% elif review_count <= 9 %}
+      {% set title = "Bathroom Boss 🧻" %}
+    {% else %}
+      {% set title = "Supreme Toilet Master 👑🚽" %}
+    {% endif %}
 
     <div class="badge">
       <div class="label">You are a:</div>
-      <div class="level">Level {{ level }}</div>
-      <div class="title">Flusher</div>
+      <div class="level">{{ title }}</div>
     </div>
   </div>
 
@@ -164,6 +185,6 @@
       window.location.href = "/login";
     }
   </script>
-  
+
 </body>
 </html>

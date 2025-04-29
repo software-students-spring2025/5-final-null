@@ -8,6 +8,7 @@
   <!-- Google Maps -->
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDBsakl8uQ5aAW2z2uYrwWgyV2UizszUGc&callback=initMap" async defer></script>
 
+
   <style>
     body {
       margin: 0;
@@ -85,9 +86,10 @@
         });
   
         marker.addListener("click", () => {
+          const id = _id.$oid || _id;
           const content = `
             <h3>${building} - Floor ${floor}</h3>
-            <a href="/bathroom/${_id}" style="text-decoration: underline; color: #1e3554;">View more →</a>
+            <a href="/bathroom/${id}" style="text-decoration: underline; color: #1e3554;">View more →</a>
           `;
           infoWindow.setContent(content);
           infoWindow.open(map, marker);

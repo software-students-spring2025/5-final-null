@@ -87,15 +87,35 @@
     button:hover {
       background-color: #e0d9c4;
     }
+
+    /* Modal Styles */
+    #review-modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #review-modal .modal-content {
+      background: #2d4c6b;
+      padding: 30px;
+      border-radius: 10px;
+      width: 350px;
+      color: white;
+    }
   </style>
 </head>
+
 <body>
   <nav>
     <ul>
       {% if logged_in %}
         <li><a href="{{ url_for('home') }}">Map</a></li>
         <li><a href="{{ url_for('profile_page') }}">Profile</a></li>
-        <li><a href="{{ url_for('logout') }}">Logout</a></li>
+        <li><a href="#" onclick="handleLogout()">Logout</a></li>
       {% else %}
         <li><a href="{{ url_for('home') }}">Map</a></li>
         <li><a href="{{ url_for('login_page') }}">Log In</a></li>
@@ -109,26 +129,58 @@
     <p><strong>Accessible:</strong> {{ 'Yes' if bathroom.is_accessible else 'No' }}</p>
     <p><strong>Gender:</strong> {{ bathroom.gender|capitalize }}</p>
 
-    <h2>Reviews</h2>
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2>Reviews</h2>
+      {% if logged_in %}
+        <button onclick="openReviewModal()" style="padding: 8px 16px; font-weight: bold; background-color: #f7eedd; color: #1e3554; border: none; border-radius: 5px; cursor: pointer;">Add Review</button>
+      {% endif %}
+    </div>
+
     {% if reviews %}
       {% for review in reviews %}
         <div class="review">
-          <p><strong>Cleanliness:</strong> {{ review.ratings.cleanliness }} / 5</p>
-          <p><strong>Privacy:</strong> {{ review.ratings.privacy }} / 5</p>
-          <p><strong>Accessibility:</strong> {{ review.ratings.accessibility }} / 5</p>
+          <p><strong>Written by user:</strong> {{ review.user_id }}</p>
+          
+          <p><strong>Cleanliness:</strong>
+            {% for _ in range(review.ratings.cleanliness) %}
+              ⭐
+            {% endfor %}
+            ({{ review.ratings.cleanliness }}/5)
+          </p>
+
+          <p><strong>Privacy:</strong>
+            {% for _ in range(review.ratings.privacy) %}
+              ⭐
+            {% endfor %}
+            ({{ review.ratings.privacy }}/5)
+          </p>
+
+          <p><strong>Accessibility:</strong>
+            {% for _ in range(review.ratings.accessibility) %}
+              ⭐
+            {% endfor %}
+            ({{ review.ratings.accessibility }}/5)
+          </p>
+
           <p><strong>Best for:</strong> {{ review.best_for }}</p>
+
           {% if review.comment %}
             <p><strong>Comment:</strong> {{ review.comment }}</p>
+          {% else %}
+            <p><strong>Comment:</strong> No comment left.</p>
           {% endif %}
         </div>
       {% endfor %}
     {% else %}
       <p>No reviews yet. Be the first to leave one!</p>
     {% endif %}
+  </div>
 
-    {% if logged_in %}
-      <h2>Leave a Review</h2>
-      <form action="{{ url_for('create_review', bathroom_id=bathroom._id) }}" method="post">
+  <!-- Review Modal -->
+  <div id="review-modal">
+    <div class="modal-content">
+      <h3>Leave a Review</h3>
+      <form id="review-form">
         <label>Cleanliness (1–5)</label>
         <input type="number" name="cleanliness" min="1" max="5" required />
 
@@ -144,11 +196,85 @@
         <label>Comment</label>
         <textarea name="comment" rows="3"></textarea>
 
-        <button type="submit">Submit Review</button>
+        <button type="submit">Submit</button>
+        <button type="button" onclick="closeReviewModal()" style="margin-top: 10px; background: transparent; color: #f7eedd; border: none;">Cancel</button>
       </form>
-    {% else %}
-      <p><a href="{{ url_for('login_page') }}" style="color: #f7eedd; text-decoration: underline;">Log in to leave a review</a></p>
-    {% endif %}
+    </div>
   </div>
+
+  {% if logged_in %}
+  <script>
+    async function handleLogout() {
+      try {
+        const res = await fetch("/api/auth/logout", {
+          method: "POST",
+          credentials: "same-origin"
+        });
+
+        if (res.ok) {
+          window.location.href = "/login";  // Redirect after logout
+        } else {
+          const data = await res.json();
+          alert("Logout failed: " + (data.error || "Unknown error"));
+        }
+      } catch (error) {
+        console.error("Unexpected error during logout:", error);
+        alert("Something went wrong. Please try again.");
+      }
+    }
+
+    function openReviewModal() {
+      document.getElementById('review-modal').style.display = 'flex';
+    }
+
+    function closeReviewModal() {
+      document.getElementById('review-modal').style.display = 'none';
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.getElementById('review-form');
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const cleanliness = form.cleanliness.value;
+        const privacy = form.privacy.value;
+        const accessibility = form.accessibility.value;
+        const best_for = form.best_for.value;
+        const comment = form.comment.value;
+
+        const bathroomId = "{{ bathroom._id|string }}";
+
+        try {
+          const response = await fetch(`/api/bathrooms/${bathroomId}/reviews`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            credentials: "same-origin",
+            body: JSON.stringify({
+              cleanliness,
+              privacy,
+              accessibility,
+              best_for,
+              comment
+            })
+          });
+
+          if (response.ok) {
+            closeReviewModal();
+            window.location.reload();
+          } else {
+            const data = await response.json();
+            alert("Error: " + (data.error || "Unknown error"));
+          }
+        } catch (error) {
+          console.error("Unexpected error:", error);
+          alert("Something went wrong. Please try again.");
+        }
+      });
+    });
+  </script>
+  {% endif %}
 </body>
 </html>
