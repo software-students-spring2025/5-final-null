@@ -1,7 +1,7 @@
 name: Web-App CI/CD
 on:
   push:
-    branches: [main, master, docker-ocean]
+    branches: [main, master, docker-ocean, deployment]
     paths:
       - 'web-app/**'
       - '.github/workflows/web-app-ci.yml'
@@ -68,7 +68,7 @@ jobs:
     name: Build and Push Docker Image
     runs-on: ubuntu-latest
     needs: test
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/deployment')
     defaults:
       run:
         working-directory: web-app
@@ -97,7 +97,7 @@ jobs:
     name: Deploy to Digital Ocean
     runs-on: ubuntu-latest
     needs: build-and-push
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/deployment')
 
     steps:
       - name: Deploy to Digital Ocean Droplet
