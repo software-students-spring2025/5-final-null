@@ -41,10 +41,8 @@ def client(app):
     """Create a test client."""
     with app.test_client() as client:
         # Enable session in the test client
+        client.application = app
         with app.app_context():
-            client.application = app
-            client.application.extensions = {}
-            client.application.extensions['pymongo'] = type('obj', (object,), {'db': None})
             yield client
 
 @pytest.fixture(scope="function", autouse=True)
@@ -69,7 +67,7 @@ def setup_db(app, monkeypatch):
         # If indexes fail, continue anyway
         pass
     
-    # Define mock get_db function
+    # Define mock get_db function to return our mock_db
     def mock_get_db():
         return mock_db
     
@@ -84,9 +82,11 @@ def setup_db(app, monkeypatch):
     for collection in mock_db.list_collection_names():
         mock_db[collection].delete_many({})
     
+    # Make the mock_db accessible from app
+    app.mock_db = mock_db
+    
     # Run test with app context
     with app.app_context():
-        app.extensions['pymongo'] = type('obj', (object,), {'db': mock_db})
         yield mock_db
 
 @pytest.fixture
@@ -144,24 +144,14 @@ def mock_review(setup_db, mock_bathroom, mock_user_id):
     return review
 
 @pytest.fixture
-def login_user(client, mock_user):
+def login_user(client, mock_user, setup_db):
     """Log in the mock user."""
     login_data = {
         "email": "test@example.com",
         "password": "password"
     }
     
-    # Ensure the password hash is correct
-    from werkzeug.security import generate_password_hash
-    client.application.test_database = client.application.config["TESTING"]
-    with client.application.app_context():
-        db = client.application.extensions['pymongo'].db
-        db.users.update_one(
-            {"_id": mock_user["_id"]},
-            {"$set": {"password_hash": generate_password_hash("password")}}
-        )
-    
-    # Log in
+    # Log in the user - the password hash is already set in mock_user fixture
     response = client.post(
         "/api/auth/login", 
         data=json.dumps(login_data),

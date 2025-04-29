@@ -227,6 +227,9 @@ def create_app():
                 "pages": (total + per_page - 1) // per_page if per_page > 0 else 0
             }), 200
         except Exception as e:
+            import traceback
+            error_traceback = traceback.format_exc()
+            print(f"Error getting bathrooms: {e}\n{error_traceback}")
             return jsonify({"error": str(e)}), 500
     
     @app.route("/api/bathrooms/<bathroom_id>", methods=["GET"])
@@ -248,8 +251,10 @@ def create_app():
                 
             return jsonify({"bathroom": json_util.dumps(bathroom)}), 200
         except Exception as e:
-            print(f"Error getting bathroom: {e}")
-            return jsonify({"error": "Failed to retrieve bathroom"}), 500
+            import traceback
+            error_traceback = traceback.format_exc()
+            print(f"Error getting bathroom: {e}\n{error_traceback}")
+            return jsonify({"error": str(e)}), 500
     
     @app.route("/api/bathrooms", methods=["POST"])
     @login_required
@@ -403,8 +408,10 @@ def create_app():
                 "pages": (total + per_page - 1) // per_page if per_page > 0 else 0
             }), 200
         except Exception as e:
-            print(f"Error getting reviews: {e}")
-            return jsonify({"error": "Failed to retrieve reviews"}), 500
+            import traceback
+            error_traceback = traceback.format_exc()
+            print(f"Error getting reviews: {e}\n{error_traceback}")
+            return jsonify({"error": str(e)}), 500
     
     @app.route("/api/reviews/<review_id>", methods=["GET"])
     def get_review(review_id):
@@ -425,8 +432,10 @@ def create_app():
                 
             return jsonify({"review": json_util.dumps(review)}), 200
         except Exception as e:
-            print(f"Error getting review: {e}")
-            return jsonify({"error": "Failed to retrieve review"}), 500
+            import traceback
+            error_traceback = traceback.format_exc()
+            print(f"Error getting review: {e}\n{error_traceback}")
+            return jsonify({"error": str(e)}), 500
     
     @app.route("/api/bathrooms/<bathroom_id>/reviews", methods=["POST"])
     @login_required
@@ -545,8 +554,10 @@ def create_app():
             
             return jsonify({"message": "Review updated successfully"}), 200
         except Exception as e:
-            print(f"Error updating review: {e}")
-            return jsonify({"error": "Failed to update review"}), 500
+            import traceback
+            error_traceback = traceback.format_exc()
+            print(f"Error updating review: {e}\n{error_traceback}")
+            return jsonify({"error": str(e)}), 500
     
     @app.route("/api/reviews/<review_id>", methods=["DELETE"])
     @login_required

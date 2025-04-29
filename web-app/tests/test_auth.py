@@ -80,20 +80,12 @@ def test_register_missing_fields(client):
     assert "Missing required fields" in response.json["error"]
 
 
-def test_login_success(client, mock_user, db):
+def test_login_success(client, mock_user):
     """Test successful login."""
     # Given
-    # Update the mock user's password hash to a known value
-    from werkzeug.security import generate_password_hash
-    password = "correctpassword"
-    db.users.update_one(
-        {"_id": mock_user["_id"]},
-        {"$set": {"password_hash": generate_password_hash(password)}}
-    )
-    
     login_data = {
         "email": "test@example.com",
-        "password": password
+        "password": "password"  # This matches the password set in the mock_user fixture
     }
     
     # When
@@ -154,30 +146,9 @@ def test_login_nonexistent_user(client):
     assert "Invalid email or password" in response.json["error"]
 
 
-def test_logout(client, mock_user):
+def test_logout(client, login_user):
     """Test logging out a user."""
-    # First log in
-    login_data = {
-        "email": "test@example.com",
-        "password": "password"  # mock password
-    }
-    
-    # Update password in mock_user
-    from werkzeug.security import generate_password_hash
-    client.application.test_database = client.application.config["TESTING"]
-    with client.application.app_context():
-        db = client.application.extensions['pymongo'].db
-        db.users.update_one(
-            {"_id": mock_user["_id"]},
-            {"$set": {"password_hash": generate_password_hash("password")}}
-        )
-    
-    # Log in
-    client.post(
-        "/api/auth/login", 
-        data=json.dumps(login_data),
-        content_type="application/json"
-    )
+    # login_user fixture has already logged in the user
     
     # Verify we're logged in
     with client.session_transaction() as sess:
@@ -192,26 +163,9 @@ def test_logout(client, mock_user):
         assert "_user_id" not in sess
 
 
-def test_get_current_user(client, mock_user):
+def test_get_current_user(client, login_user):
     """Test getting the current user profile."""
-    # First login
-    from werkzeug.security import generate_password_hash
-    with client.application.app_context():
-        db = client.application.extensions['pymongo'].db
-        db.users.update_one(
-            {"_id": mock_user["_id"]},
-            {"$set": {"password_hash": generate_password_hash("password")}}
-        )
-    
-    # Log in
-    client.post(
-        "/api/auth/login", 
-        data=json.dumps({
-            "email": "test@example.com",
-            "password": "password"
-        }),
-        content_type="application/json"
-    )
+    # login_user fixture has already logged in the user
     
     # When
     response = client.get("/api/users/me")

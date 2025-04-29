@@ -10,6 +10,11 @@ def get_db() -> Database:
     Returns:
         The MongoDB database instance
     """
+    # In testing mode, use the mock database if it exists
+    if current_app.config.get('TESTING') and hasattr(current_app, 'mock_db'):
+        return current_app.mock_db
+    
+    # Normal production/dev behavior
     if 'db' not in g:
         client = MongoClient(current_app.config['MONGO_URI'])
         g.db = client[current_app.config['MONGO_DBNAME']]
