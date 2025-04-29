@@ -18,12 +18,14 @@ def create_app():
     app = Flask(__name__)
     
     # Configure from environment variables
+    is_testing = os.environ.get('FLASK_ENV') == 'testing'
+    
     app.config.update(
         SECRET_KEY=os.environ.get('SECRET_KEY', 'development_key'),
         MONGO_URI=os.environ.get('MONGO_URI', 'mongodb://localhost:27017'),
         MONGO_DBNAME=os.environ.get('MONGO_DBNAME', 'bathroom_map'),
         JWT_SECRET_KEY=os.environ.get('JWT_SECRET_KEY', 'jwt_secret_key_dev'),
-        TESTING=os.environ.get('FLASK_ENV') == 'testing'
+        TESTING=is_testing
     )
     
     # Initialize JWT
@@ -33,7 +35,7 @@ def create_app():
     init_app(app)
     
     # Only initialize real database outside of testing
-    if not app.config.get('TESTING'):
+    if not is_testing:
         with app.app_context():
             init_db(app)
     
@@ -222,6 +224,9 @@ def create_app():
             return jsonify({"error": "Missing required fields"}), 400
         
         try:
+            # Get database connection
+            db = get_db()
+            
             # Create bathroom document
             bathroom_doc = Bathroom.create_document(
                 building=data['building'],
@@ -234,7 +239,7 @@ def create_app():
             bathroom_doc['created_by'] = user_id
 
             # Insert into database
-            result = get_db().bathrooms.insert_one(bathroom_doc)
+            result = db.bathrooms.insert_one(bathroom_doc)
             return jsonify({
                 "message": "Bathroom created successfully",
                 "bathroom_id": str(result.inserted_id)
@@ -254,8 +259,13 @@ def create_app():
             return jsonify({"error": "No data provided"}), 400
         
         try:
+            # Get database connection
+            db = get_db()
+            
             # Check if bathroom exists
-            bathroom = get_db().bathrooms.find_one({"_id": ObjectId(bathroom_id)})
+            bathroom_object_id = ObjectId(bathroom_id)
+            bathroom = db.bathrooms.find_one({"_id": bathroom_object_id})
+            
             if not bathroom:
                 return jsonify({"error": "Bathroom not found"}), 404
             
@@ -281,8 +291,8 @@ def create_app():
             update_data['updated_at'] = datetime.utcnow()
             
             # Update in database
-            get_db().bathrooms.update_one(
-                {"_id": ObjectId(bathroom_id)},
+            db.bathrooms.update_one(
+                {"_id": bathroom_object_id},
                 {"$set": update_data}
             )
             
@@ -297,16 +307,22 @@ def create_app():
     def delete_bathroom(bathroom_id):
         """Delete a specific bathroom."""
         try:
+            # Get database connection
+            db = get_db()
+            
             # Check if bathroom exists
-            bathroom = get_db().bathrooms.find_one({"_id": ObjectId(bathroom_id)})
+            bathroom_object_id = ObjectId(bathroom_id)
+            bathroom = db.bathrooms.find_one({"_id": bathroom_object_id})
+            
             if not bathroom:
                 return jsonify({"error": "Bathroom not found"}), 404
             
             # Delete bathroom and its reviews
-            get_db().bathrooms.delete_one({"_id": ObjectId(bathroom_id)})
+            db.bathrooms.delete_one({"_id": bathroom_object_id})
             
             # Handle string ID for reviews
-            get_db().reviews.delete_many({"bathroom_id": str(bathroom_id)})
+            bathroom_id_str = str(bathroom_id)
+            db.reviews.delete_many({"bathroom_id": bathroom_id_str})
             
             return jsonify({"message": "Bathroom deleted successfully"}), 200
         except Exception as e:

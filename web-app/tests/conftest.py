@@ -30,29 +30,36 @@ class MockDB:
         return self.db
 
 
-# Replace the real get_db with our mock version
 @pytest.fixture(autouse=True)
 def mock_get_db(monkeypatch):
     """Replace the real get_db with our mock version."""
+    # Create a fresh mock DB for each test
     mock_db = MockDB()
+    db = mock_db.db
     
+    # Clear any existing data
+    for collection_name in db.list_collection_names():
+        db[collection_name].delete_many({})
+    
+    # Define our mocked get_db function
     def mock_get_db_func():
-        return mock_db.db
+        return db
     
-    # Patch both the init_db function and get_db function
-    import schemas.models
+    # Import database module
     import schemas.database
     
-    # Create a proper patch that will be applied globally
+    # Patch the database connection function
     monkeypatch.setattr('schemas.database.get_db', mock_get_db_func)
-    monkeypatch.setattr('schemas.models.get_db', mock_get_db_func)
-    monkeypatch.setattr('schemas.models.init_db', lambda app: None)  # Do nothing
     
-    # Ensure Flask's g object doesn't interfere
+    # Skip database initialization in tests
+    import schemas.models
+    monkeypatch.setattr('schemas.models.init_db', lambda app: None)
+    
+    # Ensure Flask g object is clean
     if hasattr(g, 'db'):
         delattr(g, 'db')
     
-    return mock_db.db
+    return db
 
 
 @pytest.fixture
@@ -62,44 +69,41 @@ def app():
     os.environ["FLASK_ENV"] = "testing"
     os.environ["SECRET_KEY"] = "test_secret_key"
     os.environ["JWT_SECRET_KEY"] = "test_jwt_secret_key"
-    os.environ["MONGO_URI"] = "mongodb://admin:secret@localhost:27017"
+    os.environ["MONGO_URI"] = "mongodb://localhost:27017"
     os.environ["MONGO_DBNAME"] = "test_bathroom_map"
     
-    # Reload app module to get fresh create_app with patched dependencies
+    # Reload the app module to get a fresh application instance each test
     importlib.reload(app_module)
     
-    # Create app
+    # Create app with test config
     flask_app = app_module.create_app()
     flask_app.config.update({
         "TESTING": True,
+        "DEBUG": False,
         "SECRET_KEY": "test_secret_key",
         "JWT_SECRET_KEY": "test_jwt_secret_key",
-        "MONGO_URI": "mongodb://admin:secret@localhost:27017",
+        "MONGO_URI": "mongodb://localhost:27017",
         "MONGO_DBNAME": "test_bathroom_map"
     })
     
-    # Start app context so patches apply inside tests
-    ctx = flask_app.app_context()
-    ctx.push()
-    
-    yield flask_app
-    
-    # Clean up after test is done
-    ctx.pop()
+    # Return the app - the client fixture will handle context
+    return flask_app
 
 
 @pytest.fixture
 def client(app):
     """Create a test client for the app."""
-    return app.test_client()
+    # Set up app context for each test
+    with app.app_context():
+        # Create test client
+        with app.test_client() as test_client:
+            yield test_client
 
 
 @pytest.fixture
 def db(mock_get_db):
     """Get the mocked database."""
-    # Clear all collections before each test
-    for collection_name in mock_get_db.list_collection_names():
-        mock_get_db[collection_name].delete_many({})
+    # The database is already cleared in mock_get_db
     return mock_get_db
 
 
@@ -175,15 +179,4 @@ def auth_headers(app, mock_user_id):
             identity=mock_user_id,
             expires_delta=timedelta(hours=1)
         )
-        return {"Authorization": f"Bearer {access_token}"}
-
-
-@pytest.fixture
-def reset_db(db):
-    """Reset the database state before/after tests."""
-    # Clear all collections before the test
-    for collection_name in db.list_collection_names():
-        db[collection_name].delete_many({})
-    
-    # Return the clean database
-    return db 
+        return {"Authorization": f"Bearer {access_token}"} 
