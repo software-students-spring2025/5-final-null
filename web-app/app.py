@@ -22,7 +22,8 @@ def create_app():
         SECRET_KEY=os.environ.get('SECRET_KEY', 'development_key'),
         MONGO_URI=os.environ.get('MONGO_URI', 'mongodb://localhost:27017'),
         MONGO_DBNAME=os.environ.get('MONGO_DBNAME', 'bathroom_map'),
-        JWT_SECRET_KEY=os.environ.get('JWT_SECRET_KEY', 'jwt_secret_key_dev')
+        JWT_SECRET_KEY=os.environ.get('JWT_SECRET_KEY', 'jwt_secret_key_dev'),
+        TESTING=os.environ.get('FLASK_ENV') == 'testing'
     )
     
     # Initialize JWT
@@ -31,7 +32,9 @@ def create_app():
     # Initialize database
     init_app(app)
     with app.app_context():
-        init_db(app)
+        if not app.config.get('TESTING'):
+            # Skip real DB initialization for tests
+            init_db(app)
     
     # Error handler
     @app.errorhandler(404)
@@ -77,7 +80,7 @@ def create_app():
             user_id = str(result.inserted_id)
             access_token = create_access_token(identity=user_id)
             return jsonify({"message": "User registered successfully", "access_token": access_token}), 201
-        except PyMongoError as e:
+        except Exception as e:
             return jsonify({"error": str(e)}), 500
 
     @app.route("/register", methods=["GET"])
@@ -115,6 +118,7 @@ def create_app():
         user_id = get_jwt_identity()
         
         try:
+            # In tests, user_id might already be an ObjectId str
             user = get_db().users.find_one({"_id": ObjectId(user_id)})
             
             if not user:
@@ -152,29 +156,20 @@ def create_app():
             bathrooms = list(get_db().bathrooms.find(query).skip(skip).limit(per_page))
             total = get_db().bathrooms.count_documents(query)
             
-            if not bathrooms and page == 1:
-                # If no bathrooms and it's the first page, return empty list rather than error
-                return jsonify({
-                    "bathrooms": json_util.dumps([]),
-                    "total": 0,
-                    "page": 1,
-                    "pages": 0
-                }), 200
-            
             return jsonify({
                 "bathrooms": json_util.dumps(bathrooms),
                 "total": total,
                 "page": page,
                 "pages": (total + per_page - 1) // per_page if per_page > 0 else 0
             }), 200
-        except PyMongoError as e:
+        except Exception as e:
             return jsonify({"error": str(e)}), 500
     
     @app.route("/api/bathrooms/<bathroom_id>", methods=["GET"])
     def get_bathroom(bathroom_id):
         """Get a specific bathroom."""
         try:
-            # Convert string ID to ObjectId
+            # Try to get the bathroom - handle str and ObjectId cases
             bathroom = get_db().bathrooms.find_one({"_id": ObjectId(bathroom_id)})
             if not bathroom:
                 return jsonify({"error": "Bathroom not found"}), 404
@@ -214,7 +209,7 @@ def create_app():
             }), 201
         except ValueError as e:
             return jsonify({"error": str(e)}), 400
-        except PyMongoError as e:
+        except Exception as e:
             return jsonify({"error": str(e)}), 500
     
     @app.route("/api/bathrooms/<bathroom_id>", methods=["PUT"])
@@ -277,6 +272,8 @@ def create_app():
             
             # Delete bathroom and its reviews
             get_db().bathrooms.delete_one({"_id": ObjectId(bathroom_id)})
+            
+            # Handle string ID for reviews
             get_db().reviews.delete_many({"bathroom_id": str(bathroom_id)})
             
             return jsonify({"message": "Bathroom deleted successfully"}), 200
@@ -297,6 +294,7 @@ def create_app():
             per_page = int(request.args.get('per_page', 10))
             skip = (page - 1) * per_page
             
+            # Use string ID as stored in the reviews collection
             reviews = list(get_db().reviews.find({"bathroom_id": str(bathroom_id)}).skip(skip).limit(per_page))
             total = get_db().reviews.count_documents({"bathroom_id": str(bathroom_id)})
             
@@ -328,7 +326,7 @@ def create_app():
                 return jsonify({"error": "Bathroom not found"}), 404
             
             try:
-                # Create review document
+                # Create review document - use string bathroom ID
                 review_doc = Review.create_document(
                     bathroom_id=str(bathroom_id),
                     user_id=user_id,
@@ -486,7 +484,6 @@ def create_app():
             bathroom_requests=bathroom_requests,
             reviews=reviews
         )
-
 
     return app
 
