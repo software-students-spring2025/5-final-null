@@ -130,12 +130,24 @@
   <div id="map"></div>
 
   <script>
+    // Debug cookies on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log("Page loaded - available cookies:", document.cookie);
+    });
+  
     async function handleLogout() {
       await fetch("/api/auth/logout", {
         method: "POST",
         credentials: "same-origin"
       });
       window.location.href = "/login";
+    }
+
+    // Global function to get cookies by name
+    function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(';').shift();
     }
   </script>
 
@@ -278,17 +290,17 @@
 
       form.latitude.value = geoData.lat;
       form.longitude.value = geoData.long;
-
+      
       const data = {
         building: form.building.value,
         floor: form.floor.value,
-        latitude: location.lat,
-        longitude: location.lng,
+        latitude: geoData.lat,
+        longitude: geoData.long,
         is_accessible: form.is_accessible.checked,
         gender: form.gender.value
       };
 
-      // send to backend
+      // send to backend with credentials (cookies)
       const res = await fetch("/api/bathrooms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
