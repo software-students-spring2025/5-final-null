@@ -6,7 +6,7 @@
   <title>Stall Street Journal</title>
 
   <!-- Google Maps -->
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDBsakl8uQ5aAW2z2uYrwWgyV2UizszUGc&callback=initMap" async defer></script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDBsakl8uQ5aAW2z2uYrwWgyV2UizszUGc&libraries=places&callback=initMap" async defer></script>
 
   <style>
     body {
@@ -54,6 +54,42 @@
       flex-grow: 1;
       margin: 0 30px 30px 30px;
       border-radius: 20px;
+    }
+
+    .form-container button:hover {
+      background: #2d4c6b;
+    }
+
+    /* Google Places Autocomplete Styles */
+    .pac-container {
+      z-index: 1050 !important; /* Ensure it appears above the modal */
+      font-family: 'Arial', sans-serif;
+      border-radius: 5px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      border: 1px solid #e0e0e0;
+    }
+
+    .pac-item {
+      padding: 8px 10px;
+      cursor: pointer;
+    }
+
+    .pac-item:hover {
+      background-color: #f0f0f0;
+    }
+
+    .pac-item-selected, .pac-item-selected:hover {
+      background-color: #e9e9e9;
+    }
+
+    /* Make sure the autocomplete input is styled consistently */
+    #autocomplete-address {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
     }
   </style>
 
@@ -161,7 +197,7 @@
     <h3>Add a Bathroom</h3>
     <form id="bathroom-form">
       <label>Building Address</label>
-      <input type="text" name="building" required />
+      <input type="text" name="building" id="autocomplete-address" required />
       
       <label>Floor</label>
       <input type="number" name="floor" required />
@@ -260,10 +296,39 @@
     const modal = document.getElementById('add-form-modal');
     if (modal.style.display === 'none' || modal.style.display === '') {
       modal.style.display = 'flex';
+      // Initialize autocomplete when form is displayed
+      initAutocomplete();
     } 
     else {
       modal.style.display = 'none';
     }
+  }
+
+  // Add autocomplete functionality to address field
+  let autocomplete;
+  let placeData = null;
+
+  function initAutocomplete() {
+    // Get the input element
+    const input = document.getElementById('autocomplete-address');
+    
+    // Create the autocomplete object
+    autocomplete = new google.maps.places.Autocomplete(input, {
+      types: ['address'],
+      fields: ['address_components', 'formatted_address', 'geometry']
+    });
+
+    // When a place is selected, store the place data
+    autocomplete.addListener('place_changed', function() {
+      placeData = autocomplete.getPlace();
+      
+      // If we have valid place data with coordinates, set the form's hidden fields
+      if (placeData && placeData.geometry && placeData.geometry.location) {
+        const form = document.getElementById('bathroom-form');
+        form.latitude.value = placeData.geometry.location.lat();
+        form.longitude.value = placeData.geometry.location.lng();
+      }
+    });
   }
 
   const form = document.getElementById('bathroom-form');
@@ -274,49 +339,79 @@
     const form = e.target;
 
     try {
-      const geoRes = await fetch("/api/convert-address", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ address: form.building.value })
-      });
+      // If we have place data from autocomplete with coordinates, use it directly
+      if (placeData && placeData.geometry && placeData.geometry.location) {
+        const data = {
+          building: form.building.value,
+          floor: form.floor.value,
+          latitude: placeData.geometry.location.lat(),
+          longitude: placeData.geometry.location.lng(),
+          is_accessible: form.is_accessible.checked,
+          gender: form.gender.value
+        };
 
-      const geoData = await geoRes.json();
+        // Send to backend with credentials (cookies)
+        const res = await fetch("/api/bathrooms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify(data)
+        });
 
-      if (!geoData.lat || !geoData.long) {
-        alert("Address failed");
-        return;
-      }
+        const result = await res.json();
 
-      form.latitude.value = geoData.lat;
-      form.longitude.value = geoData.long;
-      
-      const data = {
-        building: form.building.value,
-        floor: form.floor.value,
-        latitude: geoData.lat,
-        longitude: geoData.long,
-        is_accessible: form.is_accessible.checked,
-        gender: form.gender.value
-      };
-
-      // send to backend with credentials (cookies)
-      const res = await fetch("/api/bathrooms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify(data)
-      });
-
-      const result = await res.json();
-
-      if (res.ok) {
-        window.location.href = `/bathroom/${result.bathroom_id}`;
+        if (res.ok) {
+          window.location.href = `/bathroom/${result.bathroom_id}`;
+        } 
+        else {
+          alert("Error: " + result.error);
+        }
       } 
+      // If we don't have place data, fall back to the API geocoding
       else {
-        alert("Error: " + result.error);
-      }
+        const geoRes = await fetch("/api/convert-address", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ address: form.building.value })
+        });
 
+        const geoData = await geoRes.json();
+
+        if (!geoData.lat || !geoData.long) {
+          alert("Address failed to geocode. Please select an address from the autocomplete suggestions.");
+          return;
+        }
+
+        form.latitude.value = geoData.lat;
+        form.longitude.value = geoData.long;
+        
+        const data = {
+          building: form.building.value,
+          floor: form.floor.value,
+          latitude: geoData.lat,
+          longitude: geoData.long,
+          is_accessible: form.is_accessible.checked,
+          gender: form.gender.value
+        };
+
+        // Send to backend with credentials (cookies)
+        const res = await fetch("/api/bathrooms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify(data)
+        });
+
+        const result = await res.json();
+
+        if (res.ok) {
+          window.location.href = `/bathroom/${result.bathroom_id}`;
+        } 
+        else {
+          alert("Error: " + result.error);
+        }
+      }
     } catch (err) {
       console.error("Unexpected error:", err);
       alert("Something went wrong. Please try again.");
