@@ -3,14 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login & Register</title>
+    <title>Stall Street Journal</title>
 </head>
 <body>
     <nav>
         <ul>
-            <li class="login_render"><a href="{{ url_for('login_page') }}">Login</a></li>
-            <li class="register_render"><a href="{{ url_for('register_page') }}">Register</a></li>
+            {% if logged_in %}
+                <li><button onclick="logout()">Logout</button></li>
+            {% else %}
+                <li><a href="{{ url_for('login_page') }}">Login</a></li>
+                <li><a href="{{ url_for('register_page') }}">Register</a></li>
+            {% endif %}
         </ul>
     </nav>
+
+    <div id="content">
+        {% if logged_in %}
+            <h1>Welcome back!</h1>
+        {% else %}
+            <h1>Welcome to Stall Street Journal!</h1>
+            <a href="{{ url_for('login_page') }}">Login</a> or 
+            <a href="{{ url_for('register_page') }}">Sign up</a>
+        {% endif %}
+    </div>
+
+    <script>
+        function logout() {
+            fetch("/api/auth/logout", {
+                method: "POST",
+                credentials: "include"
+            }).then(() => {
+                window.location.href = "/";
+            });
+        }
+    </script>
 </body>
 </html>

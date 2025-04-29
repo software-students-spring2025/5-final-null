@@ -107,7 +107,7 @@
     <div class="left-pane">
       <div class="form-box">
         <h2>Unlock the Stall Street</h2>
-        <form action="/signup" method="POST"> <!-- Flask route -->
+        <form id="signup-form"> <!-- Flask route -->
           <div class="form-group">
             <label for="name">name</label>
             <input type="text" id="name" name="name" required />
@@ -123,7 +123,7 @@
           <button type="submit">Sign Up</button>
         </form>
         <div class="login-link">
-          Already have an account? <a href="login.html">Login Here</a>
+          Already have an account? <a href="/login">Login Here</a>
         </div>
       </div>
     </div>
@@ -132,5 +132,35 @@
       <img class="logo" src="logo.png" />
     </div>
   </div>
+  <script>
+    document.getElementById("signup-form").addEventListener("submit", async function (e) {
+      e.preventDefault();
+  
+      const name = document.getElementById("name").value;
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+  
+      try {
+        const res = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ name, email, password }),
+        });
+  
+        const data = await res.json();
+  
+        if (res.ok) {
+          window.location.href = "/login";
+        } else {
+          alert(data.error || "Registration failed");
+        }
+      } catch (err) {
+        console.error(err);
+        alert("An error occurred");
+      }
+    })
+  </script>
 </body>
 </html>
