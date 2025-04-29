@@ -61,7 +61,8 @@ def create_app():
             return jsonify({"error": "Missing required fields"}), 400
         
         # Check if user exists
-        if get_db().users.find_one({"email": data['email']}):
+        existing_user = get_db().users.find_one({"email": data['email']})
+        if existing_user:
             return jsonify({"error": "User already exists"}), 400
         
         # Create user
@@ -83,6 +84,11 @@ def create_app():
     def register_page():
         """Render the sign up page."""
         return render_template("sign_up.html")
+            
+    @app.route("/login", methods=["GET"])
+    def login_page():
+        """Render the login page."""
+        return render_template("login.html")
     
     @app.route("/api/auth/login", methods=["POST"])
     def login():
@@ -107,14 +113,18 @@ def create_app():
     def get_current_user():
         """Get current user details."""
         user_id = get_jwt_identity()
-        user = get_db().users.find_one({"_id": ObjectId(user_id)})
         
-        if not user:
-            return jsonify({"error": "User not found"}), 404
-        
-        # Remove sensitive data
-        user.pop('password_hash', None)
-        return jsonify({"user": json_util.dumps(user)}), 200
+        try:
+            user = get_db().users.find_one({"_id": ObjectId(user_id)})
+            
+            if not user:
+                return jsonify({"error": "User not found"}), 404
+            
+            # Remove sensitive data
+            user.pop('password_hash', None)
+            return jsonify({"user": json_util.dumps(user)}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
     
     @app.route("/api/bathrooms", methods=["GET"])
     def get_bathrooms():
@@ -142,11 +152,20 @@ def create_app():
             bathrooms = list(get_db().bathrooms.find(query).skip(skip).limit(per_page))
             total = get_db().bathrooms.count_documents(query)
             
+            if not bathrooms and page == 1:
+                # If no bathrooms and it's the first page, return empty list rather than error
+                return jsonify({
+                    "bathrooms": json_util.dumps([]),
+                    "total": 0,
+                    "page": 1,
+                    "pages": 0
+                }), 200
+            
             return jsonify({
                 "bathrooms": json_util.dumps(bathrooms),
                 "total": total,
                 "page": page,
-                "pages": (total + per_page - 1) // per_page
+                "pages": (total + per_page - 1) // per_page if per_page > 0 else 0
             }), 200
         except PyMongoError as e:
             return jsonify({"error": str(e)}), 500
@@ -155,11 +174,12 @@ def create_app():
     def get_bathroom(bathroom_id):
         """Get a specific bathroom."""
         try:
+            # Convert string ID to ObjectId
             bathroom = get_db().bathrooms.find_one({"_id": ObjectId(bathroom_id)})
             if not bathroom:
                 return jsonify({"error": "Bathroom not found"}), 404
             return jsonify({"bathroom": json_util.dumps(bathroom)}), 200
-        except PyMongoError as e:
+        except Exception as e:
             return jsonify({"error": str(e)}), 500
     
     @app.route("/api/bathrooms", methods=["POST"])
@@ -167,6 +187,7 @@ def create_app():
     def create_bathroom():
         """Create a new bathroom."""
         data = request.get_json()
+        user_id = get_jwt_identity()
         
         # Validate input
         required_fields = ['building', 'floor', 'latitude', 'longitude']
@@ -183,13 +204,16 @@ def create_app():
                 is_accessible=data.get('is_accessible', False),
                 gender=data.get('gender', 'all')
             )
-            
+            bathroom_doc['created_by'] = user_id
+
             # Insert into database
             result = get_db().bathrooms.insert_one(bathroom_doc)
             return jsonify({
                 "message": "Bathroom created successfully",
                 "bathroom_id": str(result.inserted_id)
             }), 201
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
         except PyMongoError as e:
             return jsonify({"error": str(e)}), 500
     
@@ -204,7 +228,8 @@ def create_app():
         
         try:
             # Check if bathroom exists
-            if not get_db().bathrooms.find_one({"_id": ObjectId(bathroom_id)}):
+            bathroom = get_db().bathrooms.find_one({"_id": ObjectId(bathroom_id)})
+            if not bathroom:
                 return jsonify({"error": "Bathroom not found"}), 404
             
             # Prepare update data
@@ -221,6 +246,9 @@ def create_app():
             if 'is_accessible' in data:
                 update_data['is_accessible'] = data['is_accessible']
             if 'gender' in data:
+                # Validate gender
+                if data['gender'] not in Bathroom.VALID_GENDERS:
+                    return jsonify({"error": f"Gender must be one of: {', '.join(Bathroom.VALID_GENDERS)}"}), 400
                 update_data['gender'] = data['gender']
             
             update_data['updated_at'] = datetime.utcnow()
@@ -232,7 +260,9 @@ def create_app():
             )
             
             return jsonify({"message": "Bathroom updated successfully"}), 200
-        except PyMongoError as e:
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
             return jsonify({"error": str(e)}), 500
     
     @app.route("/api/bathrooms/<bathroom_id>", methods=["DELETE"])
@@ -241,15 +271,16 @@ def create_app():
         """Delete a specific bathroom."""
         try:
             # Check if bathroom exists
-            if not get_db().bathrooms.find_one({"_id": ObjectId(bathroom_id)}):
+            bathroom = get_db().bathrooms.find_one({"_id": ObjectId(bathroom_id)})
+            if not bathroom:
                 return jsonify({"error": "Bathroom not found"}), 404
             
             # Delete bathroom and its reviews
             get_db().bathrooms.delete_one({"_id": ObjectId(bathroom_id)})
-            get_db().reviews.delete_many({"bathroom_id": bathroom_id})
+            get_db().reviews.delete_many({"bathroom_id": str(bathroom_id)})
             
             return jsonify({"message": "Bathroom deleted successfully"}), 200
-        except PyMongoError as e:
+        except Exception as e:
             return jsonify({"error": str(e)}), 500
     
     @app.route("/api/bathrooms/<bathroom_id>/reviews", methods=["GET"])
@@ -257,7 +288,8 @@ def create_app():
         """Get all reviews for a bathroom."""
         try:
             # Check if bathroom exists
-            if not get_db().bathrooms.find_one({"_id": ObjectId(bathroom_id)}):
+            bathroom = get_db().bathrooms.find_one({"_id": ObjectId(bathroom_id)})
+            if not bathroom:
                 return jsonify({"error": "Bathroom not found"}), 404
             
             # Get reviews with pagination
@@ -265,16 +297,16 @@ def create_app():
             per_page = int(request.args.get('per_page', 10))
             skip = (page - 1) * per_page
             
-            reviews = list(get_db().reviews.find({"bathroom_id": bathroom_id}).skip(skip).limit(per_page))
-            total = get_db().reviews.count_documents({"bathroom_id": bathroom_id})
+            reviews = list(get_db().reviews.find({"bathroom_id": str(bathroom_id)}).skip(skip).limit(per_page))
+            total = get_db().reviews.count_documents({"bathroom_id": str(bathroom_id)})
             
             return jsonify({
                 "reviews": json_util.dumps(reviews),
                 "total": total,
                 "page": page,
-                "pages": (total + per_page - 1) // per_page
+                "pages": (total + per_page - 1) // per_page if per_page > 0 else 0
             }), 200
-        except PyMongoError as e:
+        except Exception as e:
             return jsonify({"error": str(e)}), 500
     
     @app.route("/api/bathrooms/<bathroom_id>/reviews", methods=["POST"])
@@ -291,27 +323,31 @@ def create_app():
         
         try:
             # Check if bathroom exists
-            if not get_db().bathrooms.find_one({"_id": ObjectId(bathroom_id)}):
+            bathroom = get_db().bathrooms.find_one({"_id": ObjectId(bathroom_id)})
+            if not bathroom:
                 return jsonify({"error": "Bathroom not found"}), 404
             
-            # Create review document
-            review_doc = Review.create_document(
-                bathroom_id=bathroom_id,
-                user_id=user_id,
-                cleanliness=int(data['cleanliness']),
-                privacy=int(data['privacy']),
-                accessibility=int(data['accessibility']),
-                best_for=data['best_for'],
-                comment=data.get('comment')
-            )
-            
-            # Insert into database
-            result = get_db().reviews.insert_one(review_doc)
-            return jsonify({
-                "message": "Review created successfully",
-                "review_id": str(result.inserted_id)
-            }), 201
-        except PyMongoError as e:
+            try:
+                # Create review document
+                review_doc = Review.create_document(
+                    bathroom_id=str(bathroom_id),
+                    user_id=user_id,
+                    cleanliness=int(data['cleanliness']),
+                    privacy=int(data['privacy']),
+                    accessibility=int(data['accessibility']),
+                    best_for=data['best_for'],
+                    comment=data.get('comment', '')
+                )
+                
+                # Insert into database
+                result = get_db().reviews.insert_one(review_doc)
+                return jsonify({
+                    "message": "Review created successfully",
+                    "review_id": str(result.inserted_id)
+                }), 201
+            except ValueError as e:
+                return jsonify({"error": str(e)}), 400
+        except Exception as e:
             return jsonify({"error": str(e)}), 500
     
     @app.route("/api/reviews/<review_id>", methods=["PUT"])
@@ -334,12 +370,30 @@ def create_app():
             
             # Prepare update data
             update_data = {}
+            ratings_update = {}
+            
             if 'cleanliness' in data:
-                update_data['ratings.cleanliness'] = int(data['cleanliness'])
+                cleanliness = int(data['cleanliness'])
+                if cleanliness not in Review.VALID_RATING_RANGE:
+                    return jsonify({"error": "Cleanliness rating must be between 1 and 5"}), 400
+                ratings_update['cleanliness'] = cleanliness
+                
             if 'privacy' in data:
-                update_data['ratings.privacy'] = int(data['privacy'])
+                privacy = int(data['privacy'])
+                if privacy not in Review.VALID_RATING_RANGE:
+                    return jsonify({"error": "Privacy rating must be between 1 and 5"}), 400
+                ratings_update['privacy'] = privacy
+                
             if 'accessibility' in data:
-                update_data['ratings.accessibility'] = int(data['accessibility'])
+                accessibility = int(data['accessibility'])
+                if accessibility not in Review.VALID_RATING_RANGE:
+                    return jsonify({"error": "Accessibility rating must be between 1 and 5"}), 400
+                ratings_update['accessibility'] = accessibility
+            
+            # Apply ratings updates if any
+            for rating_key, rating_value in ratings_update.items():
+                update_data[f'ratings.{rating_key}'] = rating_value
+                
             if 'best_for' in data:
                 update_data['best_for'] = data['best_for']
             if 'comment' in data:
@@ -352,7 +406,9 @@ def create_app():
             )
             
             return jsonify({"message": "Review updated successfully"}), 200
-        except PyMongoError as e:
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
             return jsonify({"error": str(e)}), 500
     
     @app.route("/api/reviews/<review_id>", methods=["DELETE"])
@@ -373,7 +429,7 @@ def create_app():
             get_db().reviews.delete_one({"_id": ObjectId(review_id)})
             
             return jsonify({"message": "Review deleted successfully"}), 200
-        except PyMongoError as e:
+        except Exception as e:
             return jsonify({"error": str(e)}), 500
     
     @app.route("/api/bathrooms/nearby", methods=["GET"])
@@ -381,16 +437,16 @@ def create_app():
         """Get bathrooms near a location."""
         try:
             # Get query parameters
-            lat = request.args.get('lat')
-            lng = request.args.get('lng')
+            latitude = request.args.get('latitude')
+            longitude = request.args.get('longitude')
             max_distance = request.args.get('max_distance', 500)  # Default 500m
             
-            if not lat or not lng:
+            if not latitude or not longitude:
                 return jsonify({"error": "Missing coordinates"}), 400
             
             # Convert parameters
-            lat = float(lat)
-            lng = float(lng)
+            lat = float(latitude)
+            lng = float(longitude)
             max_distance = int(max_distance)
             
             # Perform geo query
@@ -407,9 +463,9 @@ def create_app():
             }).limit(10))
             
             return jsonify({"bathrooms": json_util.dumps(bathrooms)}), 200
-        except PyMongoError as e:
+        except Exception as e:
             return jsonify({"error": str(e)}), 500
-
+    
     @app.route("/profile", methods=["GET"])
     @jwt_required()
     def profile():
@@ -430,7 +486,8 @@ def create_app():
             bathroom_requests=bathroom_requests,
             reviews=reviews
         )
-    
+
+
     return app
 
 if __name__ == "__main__":
