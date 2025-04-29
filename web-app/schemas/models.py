@@ -3,6 +3,7 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 from pymongo import MongoClient, GEOSPHERE
 from flask import current_app
+import os
 
 def init_db(app) -> None:
     """Initialize database with required indexes.
@@ -10,8 +11,8 @@ def init_db(app) -> None:
     Args:
         app: The Flask application instance
     """
-    # Skip creating real indexes in test mode
-    if app.config.get('TESTING', False):
+    # Skip creating real indexes in test mode - check both config and environment
+    if app.config.get('TESTING', False) or os.environ.get('TESTING') == 'true':
         return
         
     with app.app_context():

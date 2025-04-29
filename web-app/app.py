@@ -17,8 +17,12 @@ def create_app():
     """Create and configure the Flask application."""
     app = Flask(__name__)
     
+    # Check if running in test mode
+    testing = os.environ.get('TESTING') == 'true'
+    
     # Configure from environment variables
     app.config.update(
+        TESTING=testing,
         SECRET_KEY=os.environ.get('SECRET_KEY', 'development_key'),
         MONGO_URI=os.environ.get('MONGO_URI', 'mongodb://localhost:27017'),
         MONGO_DBNAME=os.environ.get('MONGO_DBNAME', 'bathroom_map'),
@@ -32,8 +36,11 @@ def create_app():
     
     # Initialize database
     init_app(app)
-    with app.app_context():
-        init_db(app)
+    
+    # Only initialize database indexes if not in testing mode
+    if not testing:
+        with app.app_context():
+            init_db(app)
     
     # Error handler
     @app.errorhandler(404)
