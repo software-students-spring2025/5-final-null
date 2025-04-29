@@ -106,7 +106,9 @@
     }
 
     .logo {
-      width: 100px;
+      width: 300px;
+      height: auto;
+      display: block;
       margin-bottom: 20px;
     }
 
@@ -123,7 +125,7 @@
   <nav>
     <ul>
       <li><a href="{{ url_for('home') }}">Map</a></li>
-      <li><a href="{{ url_for('login_page') }}">Sign In</a></li>
+      <li><a href="{{ url_for('login_page') }}">Log In</a></li>
     </ul>
   </nav>
 
@@ -154,7 +156,7 @@
     </div>
 
     <div class="right-pane">
-      <img class="logo" src="logo.png" alt="Logo" />
+      <img class="logo" src="{{ url_for('static', filename='logo.png') }}" />
     </div>
   </div>
 
