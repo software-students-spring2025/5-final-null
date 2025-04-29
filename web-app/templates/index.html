@@ -57,29 +57,48 @@
     }
   </style>
 
-  <script>
-    function initMap() {
-      const nyc = { lat: 40.7128, lng: -74.0060 };
-      const map = new google.maps.Map(document.getElementById("map"), {
-        zoom: 13,
-        center: nyc,
+<script>
+  async function initMap() {
+    const nyc = { lat: 40.7128, lng: -74.0060 };
+    const map = new google.maps.Map(document.getElementById("map"), {
+      zoom: 13,
+      center: nyc,
+    });
+  
+    const infoWindow = new google.maps.InfoWindow();
+  
+    try {
+      const res = await fetch("/api/bathrooms?per_page=50");
+      const data = await res.json();
+      const bathrooms = JSON.parse(data.bathrooms);
+  
+      bathrooms.forEach(bathroom => {
+        const { _id, building, floor, location } = bathroom;
+        if (!location || !location.coordinates) return;
+  
+        const [lng, lat] = location.coordinates;
+  
+        const marker = new google.maps.Marker({
+          position: { lat: lat, lng: lng },
+          map: map,
+          title: `${building} - Floor ${floor}`
+        });
+  
+        marker.addListener("click", () => {
+          const content = `
+            <h3>${building} - Floor ${floor}</h3>
+            <a href="/bathroom/${_id}" style="text-decoration: underline; color: #1e3554;">View more →</a>
+          `;
+          infoWindow.setContent(content);
+          infoWindow.open(map, marker);
+        });
       });
-
-      const marker = new google.maps.Marker({
-        position: { lat: 40.730610, lng: -73.935242 },
-        map: map,
-        title: "Toilet 1"
-      });
-
-      const infowindow = new google.maps.InfoWindow({
-        content: "<h3>Toilet 1</h3><p>⭐️⭐️⭐️⭐️ (4/5)</p>",
-      });
-
-      marker.addListener("click", () => {
-        infowindow.open(map, marker);
-      });
+    } catch (err) {
+      console.error("Failed to load bathrooms:", err);
     }
+  }
   </script>
+  
 </head>
 
 <body>
