@@ -416,18 +416,20 @@ def create_app():
             return jsonify({"error": str(e)}), 500
 
     @app.route("/profile", methods=["GET"])
-    @jwt_required()
-    def profile():
-        """Show the user's profile page with their requests and reviews."""
-        user_id = get_jwt_identity()
-        db = get_db()
+@jwt_required()
+def profile():
+    """Show the user's profile page with their requests and reviews."""
+    user_id = get_jwt_identity()
+    db = get_db()
 
+    try:
         user = db.users.find_one({"_id": ObjectId(user_id)})
         if not user:
-            return jsonify({"error": "User not found"}), 404
+            return render_template("error.html", message="User not found"), 404
 
-        bathroom_requests = list(db.bathrooms.find({"created_by": user_id}))
-        reviews = list(db.reviews.find({"user_id": user_id}))
+        bathroom_requests = list(db.bathrooms.find({"created_by": str(user_id)}))
+
+        reviews = list(db.reviews.find({"user_id": str(user_id)}))
 
         return render_template(
             "profile.html",
@@ -435,6 +437,9 @@ def create_app():
             bathroom_requests=bathroom_requests,
             reviews=reviews
         )
+    except Exception as e:
+        print(f"Error loading profile: {e}")
+        return render_template("error.html", message="An error occurred"), 500
     
     return app
 
