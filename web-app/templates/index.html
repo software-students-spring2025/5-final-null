@@ -108,7 +108,7 @@
       {% if logged_in %}
         <li><a href="{{ url_for('home') }}">Map</a></li>
         <li><a href="{{ url_for('profile_page') }}">Profile</a></li>
-        <li><a href="{{ url_for('logout') }}">Logout</a></li>
+        <li><a href="#" onclick="handleLogout()">Logout</a></li>
       {% else %}
         <li><a href="{{ url_for('home') }}">Map</a></li>
         <li><a href="{{ url_for('login_page') }}">Sign In</a></li>
@@ -128,5 +128,190 @@
 
   <!-- Full-page map -->
   <div id="map"></div>
+
+  <script>
+    async function handleLogout() {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "same-origin"
+      });
+      window.location.href = "/login";
+    }
+  </script>
+
+{% if logged_in %}
+<!-- Add Button -->
+<button id="add-btn" onclick="toggleForm()" title="Add Bathroom">+</button>
+
+<!-- Add Bathroom Form -->
+<div id="add-form-modal" style="display:none;">
+  <div class="form-container">
+    <h3>Add a Bathroom</h3>
+    <form id="bathroom-form">
+      <label>Building Address</label>
+      <input type="text" name="building" required />
+      
+      <label>Floor</label>
+      <input type="number" name="floor" required />
+      
+      <label>Accessible</label>
+      <input type="checkbox" name="is_accessible" />
+      
+      <label>Gender</label>
+      <select name="gender">
+        <option value="all">All</option>
+        <option value="male">Male</option>
+        <option value="female">Female</option>
+      </select>
+
+      <input type="hidden" name="latitude" />
+
+      <input type="hidden" name="longitude" />
+      
+      <button type="submit">Submit</button>
+      <button type="button" onclick="toggleForm()">Cancel</button>
+    </form>
+  </div>
+</div>
+
+<style>
+  #add-btn {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    background-color: #f7eedd;
+    color: #1e3554;
+    border: none;
+    font-size: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-weight: bold;
+    box-shadow: 2px 2px 10px rgba(0,0,0,0.3);
+  }
+
+  #add-form-modal {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+
+  .form-container {
+    background: #f7eedd;
+    color: #1e3554;
+    padding: 30px;
+    border-radius: 10px;
+    width: 350px;
+    font-family: Arial, sans-serif;
+  }
+
+  .form-container h3 {
+    margin-top: 0;
+  }
+
+  .form-container label {
+    margin-top: 10px;
+    display: block;
+  }
+
+  .form-container input,
+  .form-container select {
+    width: 100%;
+    padding: 8px;
+    margin-top: 5px;
+    font-size: 14px;
+  }
+
+  .form-container button {
+    margin-top: 15px;
+    padding: 10px;
+    font-weight: bold;
+    background: #1e3554;
+    color: #f7eedd;
+    border: none;
+    cursor: pointer;
+    width: 100%;
+  }
+
+  .form-container button:hover {
+    background: #2d4c6b;
+  }
+</style>
+
+<script>
+  function toggleForm() {
+    const modal = document.getElementById('add-form-modal');
+    if (modal.style.display === 'none' || modal.style.display === '') {
+      modal.style.display = 'flex';
+    } 
+    else {
+      modal.style.display = 'none';
+    }
+  }
+
+  const form = document.getElementById('bathroom-form');
+  form.addEventListener('submit', handleFormSubmit);
+
+  async function handleFormSubmit(e) {
+    e.preventDefault();
+    const form = e.target;
+
+    try {
+      const geoRes = await fetch("/api/convert-address", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ address: form.building.value })
+      });
+
+      const geoData = await geoRes.json();
+
+      if (!geoData.lat || !geoData.long) {
+        alert("Address failed");
+        return;
+      }
+
+      form.latitude.value = geoData.lat;
+      form.longitude.value = geoData.long;
+
+      const data = {
+        building: form.building.value,
+        floor: form.floor.value,
+        latitude: location.lat,
+        longitude: location.lng,
+        is_accessible: form.is_accessible.checked,
+        gender: form.gender.value
+      };
+
+      // send to backend
+      const res = await fetch("/api/bathrooms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify(data)
+      });
+
+      const result = await res.json();
+
+      if (res.ok) {
+        window.location.href = `/bathroom/${result.bathroom_id}`;
+      } 
+      else {
+        alert("Error: " + result.error);
+      }
+
+    } catch (err) {
+      console.error("Unexpected error:", err);
+      alert("Something went wrong. Please try again.");
+    }
+  }
+</script>
+{% endif %}
+
 </body>
 </html>
