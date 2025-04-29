@@ -48,6 +48,23 @@ def test_bathroom_model_creation():
     assert "updated_at" in bathroom_doc
 
 
+def test_bathroom_model_default_values():
+    """Test that Bathroom model uses default values correctly."""
+    # When - Only provide required fields
+    bathroom_doc = Bathroom.create_document(
+        building="Minimal Building",
+        floor=3,
+        latitude=42.0,
+        longitude=-71.0
+    )
+    
+    # Then - Default values should be used
+    assert bathroom_doc["building"] == "Minimal Building"
+    assert bathroom_doc["floor"] == 3
+    assert bathroom_doc["is_accessible"] is False  # Default
+    assert bathroom_doc["gender"] == "all"  # Default
+
+
 def test_bathroom_model_invalid_gender():
     """Test that creating a Bathroom with invalid gender raises error."""
     # When/Then

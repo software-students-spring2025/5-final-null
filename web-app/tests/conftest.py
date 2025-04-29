@@ -2,99 +2,101 @@
 import os
 import pytest
 import mongomock
-from flask import Flask
+from flask import Flask, g
 from bson import ObjectId
 from datetime import datetime, timedelta
+import importlib
+from pymongo import GEOSPHERE
 
-from app import create_app
-from schemas import init_app, init_db
+# Import app but not create_app yet
+import app as app_module
+from schemas import init_app
+
+
+# Mock the database initialization
+class MockDB:
+    def __init__(self):
+        self.client = mongomock.MongoClient()
+        self.db = self.client['test_bathroom_map']
+        
+        # Create indexes
+        self.db.users.create_index("email", unique=True)
+        self.db.bathrooms.create_index([("location", GEOSPHERE)])
+        self.db.bathrooms.create_index("building")
+        self.db.reviews.create_index("bathroom_id")
+        self.db.reviews.create_index("user_id")
+    
+    def get_db(self):
+        return self.db
+
+
+# Replace the real get_db with our mock version
+@pytest.fixture(autouse=True)
+def mock_get_db(monkeypatch):
+    """Replace the real get_db with our mock version."""
+    mock_db = MockDB()
+    
+    def mock_get_db_func():
+        return mock_db.db
+    
+    # Patch both the init_db function and get_db function
+    import schemas.models
+    monkeypatch.setattr('schemas.database.get_db', mock_get_db_func)
+    monkeypatch.setattr('schemas.models.init_db', lambda app: None)  # Do nothing
+    
+    return mock_db.db
 
 
 @pytest.fixture
-def app() -> Flask:
-    """Create a Flask app fixture for testing.
-    
-    Returns:
-        Flask: A Flask app configured for testing
-    """
+def app():
+    """Create a Flask app fixture for testing."""
     # Set test configuration
     os.environ["FLASK_ENV"] = "testing"
     os.environ["SECRET_KEY"] = "test_secret_key"
     os.environ["JWT_SECRET_KEY"] = "test_jwt_secret_key"
-    os.environ["MONGO_URI"] = "mongodb://localhost:27017"
+    os.environ["MONGO_URI"] = "mongodb://admin:secret@localhost:27017"
     os.environ["MONGO_DBNAME"] = "test_bathroom_map"
     
-    app = create_app()
-    app.config.update({
+    # Reload app module to get fresh create_app with patched dependencies
+    importlib.reload(app_module)
+    
+    # Create app
+    flask_app = app_module.create_app()
+    flask_app.config.update({
         "TESTING": True,
         "SECRET_KEY": "test_secret_key",
         "JWT_SECRET_KEY": "test_jwt_secret_key",
-        "MONGO_URI": "mongodb://localhost:27017",
+        "MONGO_URI": "mongodb://admin:secret@localhost:27017",
         "MONGO_DBNAME": "test_bathroom_map"
     })
     
-    # Use mongomock for testing
-    app.config["MONGO_CLIENT"] = mongomock.MongoClient()
-    
-    # Initialize app with test configuration
-    with app.app_context():
-        init_db(app)
-    
-    yield app
+    return flask_app
 
 
 @pytest.fixture
-def client(app: Flask):
-    """Create a test client for the app.
-    
-    Args:
-        app: The Flask app
-        
-    Returns:
-        Flask test client
-    """
+def client(app):
+    """Create a test client for the app."""
     return app.test_client()
 
 
 @pytest.fixture
-def db(app: Flask):
-    """Create a test database connection.
-    
-    Args:
-        app: The Flask app
-        
-    Returns:
-        MongoDB test client
-    """
-    with app.app_context():
-        from schemas import get_db
-        # Clear all collections before each test
-        for collection in get_db().list_collection_names():
-            get_db()[collection].delete_many({})
-        return get_db()
+def db(mock_get_db):
+    """Get the mocked database."""
+    # Clear all collections before each test
+    for collection_name in mock_get_db.list_collection_names():
+        mock_get_db[collection_name].delete_many({})
+    return mock_get_db
 
 
 @pytest.fixture
-def mock_user_id() -> str:
-    """Generate a mock user ID.
-    
-    Returns:
-        str: Mock user ID
-    """
+def mock_user_id():
+    """Generate a mock user ID."""
     return str(ObjectId())
 
 
 @pytest.fixture
-def mock_user(db, mock_user_id) -> dict:
-    """Create a mock user in the database.
-    
-    Args:
-        db: The test database
-        mock_user_id: Mock user ID
-        
-    Returns:
-        dict: User document
-    """
+def mock_user(db, mock_user_id):
+    """Create a mock user in the database."""
     user = {
         "_id": ObjectId(mock_user_id),
         "email": "test@example.com",
@@ -108,15 +110,8 @@ def mock_user(db, mock_user_id) -> dict:
 
 
 @pytest.fixture
-def mock_bathroom(db) -> dict:
-    """Create a mock bathroom in the database.
-    
-    Args:
-        db: The test database
-        
-    Returns:
-        dict: Bathroom document
-    """
+def mock_bathroom(db):
+    """Create a mock bathroom in the database."""
     bathroom = {
         "_id": ObjectId(),
         "building": "Test Building",
@@ -137,17 +132,8 @@ def mock_bathroom(db) -> dict:
 
 
 @pytest.fixture
-def mock_review(db, mock_bathroom, mock_user_id) -> dict:
-    """Create a mock review in the database.
-    
-    Args:
-        db: The test database
-        mock_bathroom: Mock bathroom document
-        mock_user_id: Mock user ID
-        
-    Returns:
-        dict: Review document
-    """
+def mock_review(db, mock_bathroom, mock_user_id):
+    """Create a mock review in the database."""
     review = {
         "_id": ObjectId(),
         "bathroom_id": str(mock_bathroom["_id"]),
@@ -163,16 +149,8 @@ def mock_review(db, mock_bathroom, mock_user_id) -> dict:
 
 
 @pytest.fixture
-def auth_headers(app, mock_user_id) -> dict:
-    """Create auth headers with JWT token.
-    
-    Args:
-        app: The Flask app
-        mock_user_id: Mock user ID
-        
-    Returns:
-        dict: Headers with JWT token
-    """
+def auth_headers(app, mock_user_id):
+    """Create auth headers with JWT token."""
     with app.app_context():
         from flask_jwt_extended import create_access_token
         access_token = create_access_token(
