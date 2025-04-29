@@ -8,6 +8,8 @@ from bson import ObjectId
 from bson import json_util
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+from flask_jwt_extended.exceptions import NoAuthorizationError
+from jwt import ExpiredSignatureError
 from schemas import init_app, init_db, Bathroom, Review, User, get_db
 
 # Load environment variables
@@ -45,6 +47,16 @@ def create_app():
     def bad_request(error):
         """Handle 400 errors."""
         return jsonify({"error": "Bad request"}), 400
+
+    # expired token handler
+    @app.errorhandler(ExpiredSignatureError)
+    def handle_expired_token(error):
+        return redirect(url_for('login_page'))
+
+    # missing token handler
+    @app.errorhandler(NoAuthorizationError)
+    def handle_no_token(error):
+        return redirect(url_for('login_page'))
     
     # Routes
     @app.route("/", methods=["GET"])
