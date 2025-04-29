@@ -118,7 +118,7 @@ def test_create_review_invalid_rating(client, mock_bathroom, login_user):
     # Then
     assert response.status_code == 400
     assert "error" in response.json
-    assert "rating" in response.json["error"]
+    assert "Rating" in response.json["error"]  # Check for "Rating" instead of "rating"
 
 
 def test_create_review_unauthorized(client, mock_bathroom):
@@ -140,10 +140,10 @@ def test_create_review_unauthorized(client, mock_bathroom):
     assert response.status_code == 401 or response.status_code == 302  # 302 if redirected to login
 
 
-def test_update_review(client, mock_review, login_user, mock_user):
+def test_update_review(client, mock_review, login_user, mock_user, setup_db):
     """Test updating an existing review."""
     # Given - Update mock_review to set user_id to the logged in user
-    client.application.extensions['pymongo'].db.reviews.update_one(
+    setup_db.reviews.update_one(
         {"_id": mock_review["_id"]},
         {"$set": {"user_id": str(mock_user["_id"])}}
     )
@@ -210,10 +210,10 @@ def test_update_review_unauthorized(client, mock_review):
     assert response.status_code == 401 or response.status_code == 302  # 302 if redirected to login
 
 
-def test_update_review_wrong_user(client, mock_review, login_user):
+def test_update_review_wrong_user(client, mock_review, login_user, setup_db):
     """Test updating a review belonging to another user fails."""
     # Given - Ensure the review belongs to a different user
-    client.application.extensions['pymongo'].db.reviews.update_one(
+    setup_db.reviews.update_one(
         {"_id": mock_review["_id"]},
         {"$set": {"user_id": str(ObjectId())}}  # Random user ID
     )
@@ -235,10 +235,10 @@ def test_update_review_wrong_user(client, mock_review, login_user):
     assert "error" in response.json
 
 
-def test_delete_review(client, mock_review, login_user, mock_bathroom, mock_user):
+def test_delete_review(client, mock_review, login_user, mock_bathroom, mock_user, setup_db):
     """Test deleting a review."""
     # Given - Update mock_review to set user_id to the logged in user
-    client.application.extensions['pymongo'].db.reviews.update_one(
+    setup_db.reviews.update_one(
         {"_id": mock_review["_id"]},
         {"$set": {"user_id": str(mock_user["_id"])}}
     )
@@ -274,10 +274,10 @@ def test_delete_review_unauthorized(client, mock_review):
     assert response.status_code == 401 or response.status_code == 302  # 302 if redirected to login
 
 
-def test_delete_review_wrong_user(client, mock_review, login_user):
+def test_delete_review_wrong_user(client, mock_review, login_user, setup_db):
     """Test deleting a review belonging to another user fails."""
     # Given - Ensure the review belongs to a different user
-    client.application.extensions['pymongo'].db.reviews.update_one(
+    setup_db.reviews.update_one(
         {"_id": mock_review["_id"]},
         {"$set": {"user_id": str(ObjectId())}}  # Random user ID
     )
