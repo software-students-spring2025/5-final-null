@@ -7,10 +7,13 @@ from pymongo.errors import PyMongoError
 from bson import ObjectId
 from bson import json_util
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_csrf_token
 from flask_jwt_extended.exceptions import NoAuthorizationError
 from jwt import ExpiredSignatureError
 from schemas import init_app, init_db, Bathroom, Review, User, get_db
+from geopy.geocoders import Nominatim
+from geopy.exc import GeocoderTimedOut, GeocoderServiceError
+from geopy.extra.rate_limiter import RateLimiter
 
 # Load environment variables
 load_dotenv()
@@ -31,6 +34,9 @@ def create_app():
         JWT_SECRET_KEY=os.environ.get('JWT_SECRET_KEY', 'jwt_secret_key_dev'),
         JWT_TOKEN_LOCATION=["cookies", "headers"],
         JWT_ACCESS_COOKIE_NAME="access_token_cookie",
+        JWT_COOKIE_CSRF_PROTECT=False,
+        JWT_COOKIE_SECURE=False,
+        JWT_COOKIE_SAMESITE="Lax"
     )
     
     # Initialize JWT
@@ -516,6 +522,37 @@ def create_app():
             return jsonify({"bathrooms": json_util.dumps(bathrooms)}), 200
         except PyMongoError as e:
             return jsonify({"error": str(e)}), 500
+    
+    @app.route("/api/convert-address", methods=["POST"])
+    def convert_address():
+        """Convert an address to latitude and longitude."""
+        data = request.get_json()
+        
+        # Validate input
+        if not data or not data.get('address'):
+            return jsonify({"error": "Missing address"}), 400
+        
+        address = data['address']
+        
+        # Set up geocoder with app name and rate limiting (1 request per second)
+        geolocator = Nominatim(user_agent="bathroom_map_app")
+        geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
+        
+        try:
+            # Try to geocode the address with rate limiting
+            location = geocode(address)
+            
+            if location:
+                return jsonify({
+                    "lat": location.latitude,
+                    "long": location.longitude,
+                    "display_name": location.address
+                }), 200
+            else:
+                return jsonify({"error": "Could not find coordinates for this address"}), 404
+                
+        except (GeocoderTimedOut, GeocoderServiceError) as e:
+            return jsonify({"error": f"Geocoding service error: {str(e)}"}), 500
     
     return app
 
