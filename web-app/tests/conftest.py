@@ -144,22 +144,41 @@ def mock_review(setup_db, mock_bathroom, mock_user_id):
     return review
 
 @pytest.fixture
-def login_user(client, mock_user, setup_db):
+def login_user(client, mock_user, setup_db, app):
     """Log in the mock user."""
-    login_data = {
-        "email": "test@example.com",
-        "password": "password"
-    }
+    # Create a token directly instead of relying on the login endpoint
+    with app.app_context():
+        from flask_jwt_extended import create_access_token
+        access_token = create_access_token(identity=str(mock_user["_id"]))
     
-    # Log in the user - the password hash is already set in mock_user fixture
-    response = client.post(
-        "/api/auth/login", 
-        data=json.dumps(login_data),
-        content_type="application/json"
-    )
+    # Create a client with token in headers (more reliable than cookies for testing)
+    class AuthClient:
+        def __init__(self, client, token):
+            self.client = client
+            self.token = token
+            
+        def get(self, *args, **kwargs):
+            kwargs.setdefault('headers', {})
+            kwargs['headers']['Authorization'] = f'Bearer {self.token}'
+            return self.client.get(*args, **kwargs)
+            
+        def post(self, *args, **kwargs):
+            kwargs.setdefault('headers', {})
+            kwargs['headers']['Authorization'] = f'Bearer {self.token}'
+            return self.client.post(*args, **kwargs)
+            
+        def put(self, *args, **kwargs):
+            kwargs.setdefault('headers', {})
+            kwargs['headers']['Authorization'] = f'Bearer {self.token}'
+            return self.client.put(*args, **kwargs)
+            
+        def delete(self, *args, **kwargs):
+            kwargs.setdefault('headers', {})
+            kwargs['headers']['Authorization'] = f'Bearer {self.token}'
+            return self.client.delete(*args, **kwargs)
     
-    # Return the client with active session
-    return client
+    # Return the wrapped client
+    return AuthClient(client, access_token)
 
 @pytest.fixture
 def db(setup_db):
