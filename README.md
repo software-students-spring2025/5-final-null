@@ -17,7 +17,7 @@ Bathroom Map is a web application that helps users find and review bathrooms in 
 - [Noah Perelmuter](https://github.com/np2446)
 - [Siyu Lei](https://github.com/em815)
 - [Lina Sanchez](https://github.com/linahsan)
-- [pinkmaggs](https://github.com/pinkmaggs)
+- [Margarita Billi](https://github.com/pinkmaggs)
 
 ## System Architecture
 
