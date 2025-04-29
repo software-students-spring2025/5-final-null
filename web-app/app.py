@@ -66,8 +66,9 @@ def create_app():
         if not data or not data.get('email') or not data.get('password') or not data.get('name'):
             return jsonify({"error": "Missing required fields"}), 400
         
-        # Check if user exists
-        existing_user = get_db().users.find_one({"email": data['email']})
+        # Get database and check if user exists
+        db = get_db()
+        existing_user = db.users.find_one({"email": data['email']})
         if existing_user:
             return jsonify({"error": "User already exists"}), 400
         
@@ -80,7 +81,6 @@ def create_app():
         
         try:
             # Insert the user into the database
-            db = get_db()
             result = db.users.insert_one(user_doc)
             
             # Create JWT token
