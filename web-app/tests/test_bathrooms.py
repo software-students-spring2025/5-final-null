@@ -250,8 +250,9 @@ def test_get_nearby_bathrooms(client, db, mock_bathroom):
         }
     ])
     
-    # When
-    response = client.get("/api/bathrooms/nearby?latitude=0.0&longitude=0.0&max_distance=1000")
+    # When - make sure to send numeric values
+    lat, lng = 0.0, 0.0
+    response = client.get(f"/api/bathrooms/nearby?lat={lat}&lng={lng}&max_distance=1000")
     
     # Then
     assert response.status_code == 200

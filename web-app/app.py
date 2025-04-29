@@ -118,8 +118,12 @@ def create_app():
         
         # Create token
         access_token = create_access_token(identity=str(user['_id']))
-        #return jsonify({"access_token": access_token}), 200
-        response = make_response(jsonify({"message": "Login successful"}))
+        
+        # Create response with token in cookie and user_id in JSON for tests
+        response = make_response(jsonify({
+            "message": "Login successful",
+            "user_id": str(user['_id'])
+        }))
         response.set_cookie('access_token_cookie', access_token, httponly=True, samesite='Lax')
         return response
 
@@ -453,22 +457,25 @@ def create_app():
     def get_nearby_bathrooms():
         """Get bathrooms near a location."""
         try:
-            # Get query parameters
-            lat = request.args.get('lat')
-            lng = request.args.get('lng')
+            # Get query parameters - support both naming conventions
+            lat = request.args.get('lat') or request.args.get('latitude')
+            lng = request.args.get('lng') or request.args.get('longitude') 
             max_distance = request.args.get('max_distance', 500)  # Default 500m
             
             if not lat or not lng:
                 return jsonify({"error": "Missing coordinates"}), 400
             
-            # Convert parameters
-            lat = float(lat)
-            lng = float(lng)
-            max_distance = int(max_distance)
+            try:
+                # Convert parameters
+                lat = float(lat)
+                lng = float(lng)
+                max_distance = int(max_distance)
+            except (ValueError, TypeError):
+                return jsonify({"error": "Invalid coordinate format"}), 400
             
-            # Special case for testing with mongomock (which doesn't support $near)
+            # Special case for testing
             if app.config.get('TESTING', False) or os.environ.get('TESTING') == 'true':
-                # In testing mode, just return all bathrooms
+                # In testing mode, just return all bathrooms without geo query
                 bathrooms = list(get_db().bathrooms.find().limit(10))
                 return jsonify({"bathrooms": json_util.dumps(bathrooms)}), 200
             
