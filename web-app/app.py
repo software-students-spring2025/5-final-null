@@ -39,6 +39,15 @@ def create_app():
         with app.app_context():
             init_db(app)
     
+    # Helper function for safe ObjectId conversion
+    def safe_object_id(id_str):
+        """Convert string ID to ObjectId with safe error handling."""
+        try:
+            return ObjectId(id_str)
+        except Exception:
+            # If we can't convert, return None and let the caller handle it
+            return None
+    
     # Error handler
     @app.errorhandler(404)
     def not_found(error):
@@ -199,8 +208,10 @@ def create_app():
             # Get database connection
             db = get_db()
             
-            # Convert ID to ObjectId
-            bathroom_object_id = ObjectId(bathroom_id)
+            # Safely convert ID to ObjectId
+            bathroom_object_id = safe_object_id(bathroom_id)
+            if not bathroom_object_id:
+                return jsonify({"error": "Invalid bathroom ID format"}), 400
             
             # Try to get the bathroom
             bathroom = db.bathrooms.find_one({"_id": bathroom_object_id})
@@ -209,7 +220,8 @@ def create_app():
                 
             return jsonify({"bathroom": json_util.dumps(bathroom)}), 200
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            print(f"Error getting bathroom: {e}")
+            return jsonify({"error": "Failed to retrieve bathroom"}), 500
     
     @app.route("/api/bathrooms", methods=["POST"])
     @jwt_required()
@@ -335,8 +347,12 @@ def create_app():
             # Get database connection
             db = get_db()
             
+            # Safely convert ID to ObjectId
+            bathroom_object_id = safe_object_id(bathroom_id)
+            if not bathroom_object_id:
+                return jsonify({"error": "Invalid bathroom ID format"}), 400
+            
             # Check if bathroom exists
-            bathroom_object_id = ObjectId(bathroom_id)
             bathroom = db.bathrooms.find_one({"_id": bathroom_object_id})
             
             if not bathroom:
@@ -359,147 +375,174 @@ def create_app():
                 "pages": (total + per_page - 1) // per_page if per_page > 0 else 0
             }), 200
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            print(f"Error getting reviews: {e}")
+            return jsonify({"error": "Failed to retrieve reviews"}), 500
     
     @app.route("/api/bathrooms/<bathroom_id>/reviews", methods=["POST"])
-    @jwt_required()
-    def create_review(bathroom_id):
-        """Create a new review for a bathroom."""
-        data = request.get_json()
-        user_id = get_jwt_identity()
-        
-        # Validate input
-        required_fields = ['cleanliness', 'privacy', 'accessibility', 'best_for']
-        if not data or not all(field in data for field in required_fields):
-            return jsonify({"error": "Missing required fields"}), 400
-        
+    def add_review(bathroom_id):
+        """Add a review for a bathroom."""
         try:
             # Get database connection
             db = get_db()
+            
+            # Safely convert ID to ObjectId
+            bathroom_object_id = safe_object_id(bathroom_id)
+            if not bathroom_object_id:
+                return jsonify({"error": "Invalid bathroom ID format"}), 400
             
             # Check if bathroom exists
-            bathroom_object_id = ObjectId(bathroom_id)
             bathroom = db.bathrooms.find_one({"_id": bathroom_object_id})
-            
             if not bathroom:
                 return jsonify({"error": "Bathroom not found"}), 404
-            
-            try:
-                # Create review document - use string bathroom ID
-                review_doc = Review.create_document(
-                    bathroom_id=str(bathroom_id),
-                    user_id=user_id,
-                    cleanliness=int(data['cleanliness']),
-                    privacy=int(data['privacy']),
-                    accessibility=int(data['accessibility']),
-                    best_for=data['best_for'],
-                    comment=data.get('comment', '')
-                )
                 
-                # Insert into database
-                result = db.reviews.insert_one(review_doc)
-                return jsonify({
-                    "message": "Review created successfully",
-                    "review_id": str(result.inserted_id)
-                }), 201
-            except ValueError as e:
-                return jsonify({"error": str(e)}), 400
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-    
-    @app.route("/api/reviews/<review_id>", methods=["PUT"])
-    @jwt_required()
-    def update_review(review_id):
-        """Update a specific review."""
-        data = request.get_json()
-        user_id = get_jwt_identity()
-        
-        if not data:
-            return jsonify({"error": "No data provided"}), 400
-        
-        try:
-            # Get database connection
-            db = get_db()
-            
-            # Check if review exists and belongs to user
-            review_object_id = ObjectId(review_id)
-            review = db.reviews.find_one({"_id": review_object_id})
-            
-            if not review:
-                return jsonify({"error": "Review not found"}), 404
+            # Get review data
+            data = request.json
+            if not data:
+                return jsonify({"error": "No data provided"}), 400
                 
-            if review['user_id'] != user_id:
-                return jsonify({"error": "Unauthorized"}), 403
-            
-            # Prepare update data
-            update_data = {}
-            ratings_update = {}
-            
-            if 'cleanliness' in data:
-                cleanliness = int(data['cleanliness'])
-                if cleanliness not in Review.VALID_RATING_RANGE:
-                    return jsonify({"error": "Cleanliness rating must be between 1 and 5"}), 400
-                ratings_update['cleanliness'] = cleanliness
+            required_fields = ["rating", "user_id", "comment"]
+            for field in required_fields:
+                if field not in data:
+                    return jsonify({"error": f"Missing required field: {field}"}), 400
+                    
+            # Validate rating
+            if not isinstance(data["rating"], (int, float)) or data["rating"] < 1 or data["rating"] > 5:
+                return jsonify({"error": "Rating must be a number between 1 and 5"}), 400
                 
-            if 'privacy' in data:
-                privacy = int(data['privacy'])
-                if privacy not in Review.VALID_RATING_RANGE:
-                    return jsonify({"error": "Privacy rating must be between 1 and 5"}), 400
-                ratings_update['privacy'] = privacy
-                
-            if 'accessibility' in data:
-                accessibility = int(data['accessibility'])
-                if accessibility not in Review.VALID_RATING_RANGE:
-                    return jsonify({"error": "Accessibility rating must be between 1 and 5"}), 400
-                ratings_update['accessibility'] = accessibility
+            # Create review
+            new_review = {
+                "_id": ObjectId(),
+                "bathroom_id": bathroom_id,  # Store as string
+                "user_id": data["user_id"],
+                "rating": data["rating"],
+                "comment": data["comment"],
+                "created_at": datetime.datetime.now()
+            }
             
-            # Apply ratings updates if any
-            for rating_key, rating_value in ratings_update.items():
-                update_data[f'ratings.{rating_key}'] = rating_value
-                
-            if 'best_for' in data:
-                update_data['best_for'] = data['best_for']
-            if 'comment' in data:
-                update_data['comment'] = data['comment']
+            # Insert review
+            result = db.reviews.insert_one(new_review)
             
-            # Update in database
-            db.reviews.update_one(
-                {"_id": review_object_id},
-                {"$set": update_data}
+            # Update bathroom rating
+            all_reviews = list(db.reviews.find({"bathroom_id": bathroom_id}))
+            avg_rating = sum(review["rating"] for review in all_reviews) / len(all_reviews)
+            db.bathrooms.update_one(
+                {"_id": bathroom_object_id},
+                {"$set": {"rating": avg_rating, "num_reviews": len(all_reviews)}}
             )
             
-            return jsonify({"message": "Review updated successfully"}), 200
-        except ValueError as e:
-            return jsonify({"error": str(e)}), 400
+            return jsonify({"review": json_util.dumps(new_review)}), 201
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            print(f"Error adding review: {e}")
+            return jsonify({"error": "Failed to add review"}), 500
     
-    @app.route("/api/reviews/<review_id>", methods=["DELETE"])
-    @jwt_required()
-    def delete_review(review_id):
-        """Delete a specific review."""
-        user_id = get_jwt_identity()
-        
+    @app.route("/api/reviews/<review_id>", methods=["PUT"])
+    def update_review(review_id):
+        """Update an existing review."""
         try:
             # Get database connection
             db = get_db()
             
-            # Check if review exists and belongs to user
-            review_object_id = ObjectId(review_id)
-            review = db.reviews.find_one({"_id": review_object_id})
+            # Safely convert ID to ObjectId
+            review_object_id = safe_object_id(review_id)
+            if not review_object_id:
+                return jsonify({"error": "Invalid review ID format"}), 400
             
+            # Check if review exists
+            review = db.reviews.find_one({"_id": review_object_id})
             if not review:
                 return jsonify({"error": "Review not found"}), 404
                 
-            if review['user_id'] != user_id:
-                return jsonify({"error": "Unauthorized"}), 403
+            # Get review data
+            data = request.json
+            if not data:
+                return jsonify({"error": "No data provided"}), 400
+                
+            # Prepare update data
+            update_data = {}
+            if "rating" in data:
+                if not isinstance(data["rating"], (int, float)) or data["rating"] < 1 or data["rating"] > 5:
+                    return jsonify({"error": "Rating must be a number between 1 and 5"}), 400
+                update_data["rating"] = data["rating"]
+                
+            if "comment" in data:
+                update_data["comment"] = data["comment"]
+                
+            if not update_data:
+                return jsonify({"error": "No valid fields to update"}), 400
+                
+            # Update review
+            db.reviews.update_one({"_id": review_object_id}, {"$set": update_data})
             
-            # Delete review
-            db.reviews.delete_one({"_id": review_object_id})
+            # Update bathroom rating if necessary
+            if "rating" in update_data:
+                bathroom_id = review["bathroom_id"]
+                bathroom_object_id = safe_object_id(bathroom_id)
+                if bathroom_object_id:
+                    all_reviews = list(db.reviews.find({"bathroom_id": bathroom_id}))
+                    if all_reviews:
+                        avg_rating = sum(r["rating"] for r in all_reviews) / len(all_reviews)
+                        db.bathrooms.update_one(
+                            {"_id": bathroom_object_id},
+                            {"$set": {"rating": avg_rating}}
+                        )
+            
+            return jsonify({"message": "Review updated successfully"}), 200
+        except Exception as e:
+            print(f"Error updating review: {e}")
+            return jsonify({"error": "Failed to update review"}), 500
+    
+    @app.route("/api/reviews/<review_id>", methods=["DELETE"])
+    def delete_review(review_id):
+        """Delete an existing review."""
+        try:
+            # Get database connection
+            db = get_db()
+            
+            # Safely convert ID to ObjectId
+            review_object_id = safe_object_id(review_id)
+            if not review_object_id:
+                return jsonify({"error": "Invalid review ID format"}), 400
+            
+            # Check if review exists
+            review = db.reviews.find_one({"_id": review_object_id})
+            if not review:
+                return jsonify({"error": "Review not found"}), 404
+                
+            # Get the bathroom ID associated with this review for rating update
+            bathroom_id = review.get("bathroom_id")
+            
+            # Delete the review
+            result = db.reviews.delete_one({"_id": review_object_id})
+            
+            if result.deleted_count == 0:
+                return jsonify({"error": "Failed to delete review"}), 500
+                
+            # Update bathroom rating if needed
+            if bathroom_id:
+                bathroom_object_id = safe_object_id(bathroom_id)
+                if bathroom_object_id:
+                    # Get all remaining reviews for this bathroom
+                    all_reviews = list(db.reviews.find({"bathroom_id": bathroom_id}))
+                    
+                    if all_reviews:
+                        # Calculate new average rating
+                        avg_rating = sum(r["rating"] for r in all_reviews) / len(all_reviews)
+                        # Update bathroom with new average rating
+                        db.bathrooms.update_one(
+                            {"_id": bathroom_object_id},
+                            {"$set": {"rating": avg_rating}}
+                        )
+                    else:
+                        # No reviews left, reset rating to 0
+                        db.bathrooms.update_one(
+                            {"_id": bathroom_object_id},
+                            {"$set": {"rating": 0}}
+                        )
             
             return jsonify({"message": "Review deleted successfully"}), 200
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            print(f"Error deleting review: {e}")
+            return jsonify({"error": "Failed to delete review"}), 500
     
     @app.route("/api/bathrooms/nearby", methods=["GET"])
     def get_nearby_bathrooms():
@@ -521,8 +564,8 @@ def create_app():
             lng = float(longitude)
             max_distance = int(max_distance)
             
-            # Perform geo query - handle possible errors in test environment
             try:
+                # First, try the proper geospatial query
                 bathrooms = list(db.bathrooms.find({
                     "location": {
                         "$near": {
@@ -534,16 +577,18 @@ def create_app():
                         }
                     }
                 }).limit(10))
-            except Exception as geo_error:
-                # In test environment, mongomock might not support geo queries
+            except Exception:
+                # Fallback for tests or if geo queries not supported
                 if app.config.get('TESTING'):
-                    # Fallback to simple query in test mode
+                    # In test mode, just return all bathrooms
                     bathrooms = list(db.bathrooms.find().limit(10))
                 else:
-                    raise geo_error
+                    # In production, reraise the error
+                    raise
             
             return jsonify({"bathrooms": json_util.dumps(bathrooms)}), 200
         except Exception as e:
+            print(f"Error in nearby bathrooms: {e}")
             return jsonify({"error": str(e)}), 500
     
     @app.route("/profile", methods=["GET"])

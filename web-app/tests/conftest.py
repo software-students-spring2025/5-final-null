@@ -48,8 +48,20 @@ def setup_db(app, monkeypatch):
     mock_client = mongomock.MongoClient()
     mock_db = mock_client["test_bathroom_map"]
     
-    # Set up indexes
+    # Set up all required indexes
     mock_db.users.create_index("email", unique=True)
+    
+    # Create but don't enforce GEOSPHERE index in test mode
+    # (mongomock doesn't fully support it)
+    try:
+        from pymongo import GEOSPHERE
+        mock_db.bathrooms.create_index([("location", "2dsphere")])
+        mock_db.bathrooms.create_index("building")
+        mock_db.reviews.create_index("bathroom_id")
+        mock_db.reviews.create_index("user_id")
+    except Exception:
+        # If indexes fail, continue anyway
+        pass
     
     # Define mock get_db function
     def mock_get_db():
@@ -140,4 +152,9 @@ def auth_headers(app, mock_user_id):
             expires_delta=timedelta(hours=1)
         )
     
-    return {"Authorization": f"Bearer {access_token}"} 
+    return {"Authorization": f"Bearer {access_token}"}
+
+@pytest.fixture
+def db(setup_db):
+    """Alias for setup_db to maintain backward compatibility with tests."""
+    return setup_db 
