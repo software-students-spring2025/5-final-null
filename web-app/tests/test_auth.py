@@ -1,7 +1,7 @@
 """Tests for authentication routes and functionality."""
 import json
 import pytest
-from flask import Flask
+from flask import Flask, session
 from werkzeug.security import check_password_hash
 from bson import ObjectId
 
@@ -24,13 +24,17 @@ def test_register_success(client, db):
     
     # Then
     assert response.status_code == 201
-    assert "access_token" in response.json
+    assert "user_id" in response.json
     
     # Verify user was created in DB
     created_user = db.users.find_one({"email": "new@example.com"})
     assert created_user is not None
     assert created_user["name"] == "New User"
     assert check_password_hash(created_user["password_hash"], "securepassword")
+    
+    # Verify login session was created
+    with client.session_transaction() as sess:
+        assert "_user_id" in sess
 
 
 def test_register_existing_user(client, mock_user):
@@ -101,7 +105,11 @@ def test_login_success(client, mock_user, db):
     
     # Then
     assert response.status_code == 200
-    assert "access_token" in response.json
+    assert "user_id" in response.json
+    
+    # Verify login session was created
+    with client.session_transaction() as sess:
+        assert "_user_id" in sess
 
 
 def test_login_invalid_credentials(client, mock_user):
@@ -146,13 +154,67 @@ def test_login_nonexistent_user(client):
     assert "Invalid email or password" in response.json["error"]
 
 
-def test_get_current_user(client, mock_user, auth_headers):
-    """Test getting the current user profile with valid token."""
-    # When
-    response = client.get(
-        "/api/users/me",
-        headers=auth_headers
+def test_logout(client, mock_user):
+    """Test logging out a user."""
+    # First log in
+    login_data = {
+        "email": "test@example.com",
+        "password": "password"  # mock password
+    }
+    
+    # Update password in mock_user
+    from werkzeug.security import generate_password_hash
+    client.application.test_database = client.application.config["TESTING"]
+    with client.application.app_context():
+        db = client.application.extensions['pymongo'].db
+        db.users.update_one(
+            {"_id": mock_user["_id"]},
+            {"$set": {"password_hash": generate_password_hash("password")}}
+        )
+    
+    # Log in
+    client.post(
+        "/api/auth/login", 
+        data=json.dumps(login_data),
+        content_type="application/json"
     )
+    
+    # Verify we're logged in
+    with client.session_transaction() as sess:
+        assert "_user_id" in sess
+    
+    # Now logout
+    response = client.post("/api/auth/logout")
+    
+    # Verify we're logged out
+    assert response.status_code == 200
+    with client.session_transaction() as sess:
+        assert "_user_id" not in sess
+
+
+def test_get_current_user(client, mock_user):
+    """Test getting the current user profile."""
+    # First login
+    from werkzeug.security import generate_password_hash
+    with client.application.app_context():
+        db = client.application.extensions['pymongo'].db
+        db.users.update_one(
+            {"_id": mock_user["_id"]},
+            {"$set": {"password_hash": generate_password_hash("password")}}
+        )
+    
+    # Log in
+    client.post(
+        "/api/auth/login", 
+        data=json.dumps({
+            "email": "test@example.com",
+            "password": "password"
+        }),
+        content_type="application/json"
+    )
+    
+    # When
+    response = client.get("/api/users/me")
     
     # Then
     assert response.status_code == 200
@@ -161,10 +223,10 @@ def test_get_current_user(client, mock_user, auth_headers):
     assert "password_hash" not in response_data
 
 
-def test_get_current_user_no_token(client):
-    """Test getting user profile without token fails."""
+def test_get_current_user_not_logged_in(client):
+    """Test getting user profile without being logged in fails."""
     # When
     response = client.get("/api/users/me")
     
     # Then
-    assert response.status_code == 401 
+    assert response.status_code == 401 or response.status_code == 302  # 302 if redirected to login 

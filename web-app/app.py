@@ -1,17 +1,27 @@
 """Main Flask app for the bathroom map application."""
 import os
 from datetime import datetime
-from flask import Flask, render_template, request, jsonify, redirect, url_for, abort
+from flask import Flask, render_template, request, jsonify, redirect, url_for, abort, session, flash
 from dotenv import load_dotenv
 from pymongo.errors import PyMongoError
 from bson import ObjectId
 from bson import json_util
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from schemas import init_app, init_db, Bathroom, Review, User, get_db
 
 # Load environment variables
 load_dotenv()
+
+class UserModel(UserMixin):
+    def __init__(self, user_data):
+        self.user_data = user_data
+        self.id = str(user_data['_id'])
+        self.email = user_data['email']
+        self.name = user_data['name']
+    
+    def get_id(self):
+        return self.id
 
 def create_app():
     """Create and configure the Flask application."""
@@ -24,12 +34,21 @@ def create_app():
         SECRET_KEY=os.environ.get('SECRET_KEY', 'development_key'),
         MONGO_URI=os.environ.get('MONGO_URI', 'mongodb://localhost:27017'),
         MONGO_DBNAME=os.environ.get('MONGO_DBNAME', 'bathroom_map'),
-        JWT_SECRET_KEY=os.environ.get('JWT_SECRET_KEY', 'jwt_secret_key_dev'),
         TESTING=is_testing
     )
     
-    # Initialize JWT
-    jwt = JWTManager(app)
+    # Initialize Flask-Login
+    login_manager = LoginManager()
+    login_manager.init_app(app)
+    login_manager.login_view = 'login_page'
+    
+    @login_manager.user_loader
+    def load_user(user_id):
+        db = get_db()
+        user_data = db.users.find_one({"_id": ObjectId(user_id)})
+        if not user_data:
+            return None
+        return UserModel(user_data)
     
     # Initialize database
     init_app(app)
@@ -92,13 +111,15 @@ def create_app():
             # Insert the user into the database
             result = db.users.insert_one(user_doc)
             
-            # Create JWT token
+            # Create user model and log in
             user_id = str(result.inserted_id)
-            access_token = create_access_token(identity=user_id)
+            user_doc['_id'] = result.inserted_id
+            user = UserModel(user_doc)
+            login_user(user)
             
             return jsonify({
                 "message": "User registered successfully", 
-                "access_token": access_token
+                "user_id": user_id
             }), 201
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -124,28 +145,35 @@ def create_app():
         
         # Find user
         db = get_db()
-        user = db.users.find_one({"email": data['email']})
+        user_data = db.users.find_one({"email": data['email']})
         
         # Validate password
-        if not user or not check_password_hash(user['password_hash'], data['password']):
+        if not user_data or not check_password_hash(user_data['password_hash'], data['password']):
             return jsonify({"error": "Invalid email or password"}), 401
         
-        # Create token
-        access_token = create_access_token(identity=str(user['_id']))
-        return jsonify({"access_token": access_token}), 200
+        # Create user model and log in
+        user = UserModel(user_data)
+        login_user(user)
+        
+        return jsonify({"user_id": user.id}), 200
+    
+    @app.route("/api/auth/logout", methods=["POST"])
+    @login_required
+    def logout():
+        """Logout the current user."""
+        logout_user()
+        return jsonify({"message": "Logged out successfully"}), 200
     
     @app.route("/api/users/me", methods=["GET"])
-    @jwt_required()
+    @login_required
     def get_current_user():
         """Get current user details."""
-        user_id = get_jwt_identity()
-        
         try:
             # Get database connection
             db = get_db()
             
             # Convert string ID to ObjectId if needed
-            user_object_id = ObjectId(user_id) if not isinstance(user_id, ObjectId) else user_id
+            user_object_id = ObjectId(current_user.id)
             
             # Find user
             user = db.users.find_one({"_id": user_object_id})
@@ -224,11 +252,11 @@ def create_app():
             return jsonify({"error": "Failed to retrieve bathroom"}), 500
     
     @app.route("/api/bathrooms", methods=["POST"])
-    @jwt_required()
+    @login_required
     def create_bathroom():
         """Create a new bathroom."""
         data = request.get_json()
-        user_id = get_jwt_identity()
+        user_id = current_user.id
         
         # Validate input
         required_fields = ['building', 'floor', 'latitude', 'longitude']
@@ -262,7 +290,7 @@ def create_app():
             return jsonify({"error": str(e)}), 500
     
     @app.route("/api/bathrooms/<bathroom_id>", methods=["PUT"])
-    @jwt_required()
+    @login_required
     def update_bathroom(bathroom_id):
         """Update a specific bathroom."""
         data = request.get_json()
@@ -315,7 +343,7 @@ def create_app():
             return jsonify({"error": str(e)}), 500
     
     @app.route("/api/bathrooms/<bathroom_id>", methods=["DELETE"])
-    @jwt_required()
+    @login_required
     def delete_bathroom(bathroom_id):
         """Delete a specific bathroom."""
         try:
@@ -378,7 +406,30 @@ def create_app():
             print(f"Error getting reviews: {e}")
             return jsonify({"error": "Failed to retrieve reviews"}), 500
     
+    @app.route("/api/reviews/<review_id>", methods=["GET"])
+    def get_review(review_id):
+        """Get a specific review by ID."""
+        try:
+            # Get database connection
+            db = get_db()
+            
+            # Safely convert ID to ObjectId
+            review_object_id = safe_object_id(review_id)
+            if not review_object_id:
+                return jsonify({"error": "Invalid review ID format"}), 400
+            
+            # Get the review
+            review = db.reviews.find_one({"_id": review_object_id})
+            if not review:
+                return jsonify({"error": "Review not found"}), 404
+                
+            return jsonify({"review": json_util.dumps(review)}), 200
+        except Exception as e:
+            print(f"Error getting review: {e}")
+            return jsonify({"error": "Failed to retrieve review"}), 500
+    
     @app.route("/api/bathrooms/<bathroom_id>/reviews", methods=["POST"])
+    @login_required
     def add_review(bathroom_id):
         """Add a review for a bathroom."""
         try:
@@ -400,7 +451,8 @@ def create_app():
             if not data:
                 return jsonify({"error": "No data provided"}), 400
                 
-            required_fields = ["rating", "user_id", "comment"]
+            # Now we use current_user.id instead of requiring user_id in the request
+            required_fields = ["rating", "comment"]
             for field in required_fields:
                 if field not in data:
                     return jsonify({"error": f"Missing required field: {field}"}), 400
@@ -413,10 +465,10 @@ def create_app():
             new_review = {
                 "_id": ObjectId(),
                 "bathroom_id": bathroom_id,  # Store as string
-                "user_id": data["user_id"],
+                "user_id": current_user.id,
                 "rating": data["rating"],
                 "comment": data["comment"],
-                "created_at": datetime.datetime.now()
+                "created_at": datetime.now()
             }
             
             # Insert review
@@ -436,6 +488,7 @@ def create_app():
             return jsonify({"error": "Failed to add review"}), 500
     
     @app.route("/api/reviews/<review_id>", methods=["PUT"])
+    @login_required
     def update_review(review_id):
         """Update an existing review."""
         try:
@@ -451,6 +504,10 @@ def create_app():
             review = db.reviews.find_one({"_id": review_object_id})
             if not review:
                 return jsonify({"error": "Review not found"}), 404
+            
+            # Check if the current user is the author of the review
+            if review["user_id"] != current_user.id:
+                return jsonify({"error": "You can only update your own reviews"}), 403
                 
             # Get review data
             data = request.json
@@ -492,6 +549,7 @@ def create_app():
             return jsonify({"error": "Failed to update review"}), 500
     
     @app.route("/api/reviews/<review_id>", methods=["DELETE"])
+    @login_required
     def delete_review(review_id):
         """Delete an existing review."""
         try:
@@ -507,6 +565,10 @@ def create_app():
             review = db.reviews.find_one({"_id": review_object_id})
             if not review:
                 return jsonify({"error": "Review not found"}), 404
+                
+            # Check if the current user is the author of the review
+            if review["user_id"] != current_user.id:
+                return jsonify({"error": "You can only delete your own reviews"}), 403
                 
             # Get the bathroom ID associated with this review for rating update
             bathroom_id = review.get("bathroom_id")
@@ -592,22 +654,18 @@ def create_app():
             return jsonify({"error": str(e)}), 500
     
     @app.route("/profile", methods=["GET"])
-    @jwt_required()
+    @login_required
     def profile():
         """Show the user's profile page with their requests and reviews."""
-        user_id = get_jwt_identity()
         db = get_db()
-
-        user = db.users.find_one({"_id": ObjectId(user_id)})
-        if not user:
-            return jsonify({"error": "User not found"}), 404
+        user_id = current_user.id
 
         bathroom_requests = list(db.bathrooms.find({"created_by": user_id}))
         reviews = list(db.reviews.find({"user_id": user_id}))
 
         return render_template(
             "profile.html",
-            user=user,
+            user=current_user,
             bathroom_requests=bathroom_requests,
             reviews=reviews
         )

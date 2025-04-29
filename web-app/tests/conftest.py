@@ -6,6 +6,8 @@ from flask import Flask
 from bson import ObjectId
 from datetime import datetime, timedelta
 import importlib
+import json
+from werkzeug.security import generate_password_hash
 
 # Import app but not create_app yet
 import app as app_module
@@ -17,7 +19,6 @@ def app():
     # Set test environment
     os.environ["FLASK_ENV"] = "testing"
     os.environ["SECRET_KEY"] = "test_secret_key"
-    os.environ["JWT_SECRET_KEY"] = "test_jwt_secret_key"
     os.environ["MONGO_URI"] = "mongodb://localhost:27017"
     os.environ["MONGO_DBNAME"] = "test_bathroom_map"
     
@@ -27,9 +28,10 @@ def app():
         "TESTING": True,
         "DEBUG": False,
         "SECRET_KEY": "test_secret_key",
-        "JWT_SECRET_KEY": "test_jwt_secret_key",
         "MONGO_URI": "mongodb://localhost:27017",
-        "MONGO_DBNAME": "test_bathroom_map"
+        "MONGO_DBNAME": "test_bathroom_map",
+        "SERVER_NAME": "localhost.localdomain",  # Needed for url_for in tests
+        "WTF_CSRF_ENABLED": False  # Disable CSRF for testing
     })
     
     return flask_app
@@ -38,7 +40,11 @@ def app():
 def client(app):
     """Create a test client."""
     with app.test_client() as client:
+        # Enable session in the test client
         with app.app_context():
+            client.application = app
+            client.application.extensions = {}
+            client.application.extensions['pymongo'] = type('obj', (object,), {'db': None})
             yield client
 
 @pytest.fixture(scope="function", autouse=True)
@@ -80,6 +86,7 @@ def setup_db(app, monkeypatch):
     
     # Run test with app context
     with app.app_context():
+        app.extensions['pymongo'] = type('obj', (object,), {'db': mock_db})
         yield mock_db
 
 @pytest.fixture
@@ -93,7 +100,7 @@ def mock_user(setup_db, mock_user_id):
     user = {
         "_id": ObjectId(mock_user_id),
         "email": "test@example.com",
-        "password_hash": "pbkdf2:sha256:150000$MOCK_HASH",
+        "password_hash": generate_password_hash("password"),
         "name": "Test User",
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
@@ -129,12 +136,7 @@ def mock_review(setup_db, mock_bathroom, mock_user_id):
         "_id": ObjectId(),
         "bathroom_id": str(mock_bathroom["_id"]),
         "user_id": mock_user_id,
-        "ratings": {
-            "cleanliness": 4,
-            "privacy": 4,
-            "accessibility": 4
-        },
-        "best_for": "number 1",
+        "rating": 4,
         "comment": "Test review comment",
         "created_at": datetime.utcnow()
     }
@@ -142,17 +144,32 @@ def mock_review(setup_db, mock_bathroom, mock_user_id):
     return review
 
 @pytest.fixture
-def auth_headers(app, mock_user_id):
-    """Create auth headers with JWT token."""
-    from flask_jwt_extended import create_access_token
+def login_user(client, mock_user):
+    """Log in the mock user."""
+    login_data = {
+        "email": "test@example.com",
+        "password": "password"
+    }
     
-    with app.app_context():
-        access_token = create_access_token(
-            identity=mock_user_id,
-            expires_delta=timedelta(hours=1)
+    # Ensure the password hash is correct
+    from werkzeug.security import generate_password_hash
+    client.application.test_database = client.application.config["TESTING"]
+    with client.application.app_context():
+        db = client.application.extensions['pymongo'].db
+        db.users.update_one(
+            {"_id": mock_user["_id"]},
+            {"$set": {"password_hash": generate_password_hash("password")}}
         )
     
-    return {"Authorization": f"Bearer {access_token}"}
+    # Log in
+    response = client.post(
+        "/api/auth/login", 
+        data=json.dumps(login_data),
+        content_type="application/json"
+    )
+    
+    # Return the client with active session
+    return client
 
 @pytest.fixture
 def db(setup_db):

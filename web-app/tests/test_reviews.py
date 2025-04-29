@@ -16,7 +16,7 @@ def test_get_reviews(client, mock_bathroom, mock_review):
     reviews = json.loads(data["reviews"])
     assert len(reviews) == 1
     assert reviews[0]["comment"] == "Test review comment"
-    assert reviews[0]["ratings"]["cleanliness"] == 4
+    assert reviews[0]["rating"] == 4
 
 
 def test_get_reviews_nonexistent_bathroom(client):
@@ -29,54 +29,70 @@ def test_get_reviews_nonexistent_bathroom(client):
     assert "error" in response.json
 
 
-def test_create_review(client, mock_bathroom, auth_headers):
+def test_get_review(client, mock_review):
+    """Test getting a specific review by ID."""
+    # When
+    response = client.get(f"/api/reviews/{mock_review['_id']}")
+    
+    # Then
+    assert response.status_code == 200
+    data = response.json
+    assert "review" in data
+    review = json.loads(data["review"])
+    assert review["comment"] == "Test review comment"
+    assert review["rating"] == 4
+
+
+def test_get_nonexistent_review(client):
+    """Test getting a non-existent review returns 404."""
+    # When
+    response = client.get(f"/api/reviews/{ObjectId()}")
+    
+    # Then
+    assert response.status_code == 404
+    assert "error" in response.json
+
+
+def test_create_review(client, mock_bathroom, login_user):
     """Test creating a new review."""
     # Given
     review_data = {
-        "cleanliness": 5,
-        "privacy": 4,
-        "accessibility": 3,
-        "best_for": "number 2",
+        "rating": 5,
         "comment": "Great bathroom!"
     }
     
     # When
-    response = client.post(
+    response = login_user.post(
         f"/api/bathrooms/{mock_bathroom['_id']}/reviews",
         data=json.dumps(review_data),
-        content_type="application/json",
-        headers=auth_headers
+        content_type="application/json"
     )
     
     # Then
     assert response.status_code == 201
-    assert "review_id" in response.json
+    assert "review" in response.json
     
     # Check review was created
     bathroom_response = client.get(f"/api/bathrooms/{mock_bathroom['_id']}/reviews")
     reviews = json.loads(bathroom_response.json["reviews"])
     new_review = [r for r in reviews if r["comment"] == "Great bathroom!"]
     assert len(new_review) == 1
-    assert new_review[0]["ratings"]["cleanliness"] == 5
+    assert new_review[0]["rating"] == 5
 
 
-def test_create_review_nonexistent_bathroom(client, auth_headers):
+def test_create_review_nonexistent_bathroom(client, login_user):
     """Test creating a review for a non-existent bathroom fails."""
     # Given
     review_data = {
-        "cleanliness": 5,
-        "privacy": 4,
-        "accessibility": 3,
-        "best_for": "number 2",
+        "rating": 5,
         "comment": "Won't be created"
     }
     
     # When
-    response = client.post(
+    response = login_user.post(
         f"/api/bathrooms/{ObjectId()}/reviews",
         data=json.dumps(review_data),
-        content_type="application/json",
-        headers=auth_headers
+        content_type="application/json"
     )
     
     # Then
@@ -84,23 +100,19 @@ def test_create_review_nonexistent_bathroom(client, auth_headers):
     assert "error" in response.json
 
 
-def test_create_review_invalid_rating(client, mock_bathroom, auth_headers):
+def test_create_review_invalid_rating(client, mock_bathroom, login_user):
     """Test creating a review with invalid rating fails."""
     # Given - Rating out of range
     review_data = {
-        "cleanliness": 6,  # Should be 1-5
-        "privacy": 4,
-        "accessibility": 3,
-        "best_for": "number 2",
+        "rating": 6,  # Should be 1-5
         "comment": "Invalid rating"
     }
     
     # When
-    response = client.post(
+    response = login_user.post(
         f"/api/bathrooms/{mock_bathroom['_id']}/reviews",
         data=json.dumps(review_data),
-        content_type="application/json",
-        headers=auth_headers
+        content_type="application/json"
     )
     
     # Then
@@ -113,10 +125,7 @@ def test_create_review_unauthorized(client, mock_bathroom):
     """Test creating a review without authentication fails."""
     # Given
     review_data = {
-        "cleanliness": 5,
-        "privacy": 4,
-        "accessibility": 3,
-        "best_for": "number 2",
+        "rating": 5,
         "comment": "Unauthorized review"
     }
     
@@ -128,26 +137,27 @@ def test_create_review_unauthorized(client, mock_bathroom):
     )
     
     # Then
-    assert response.status_code == 401
+    assert response.status_code == 401 or response.status_code == 302  # 302 if redirected to login
 
 
-def test_update_review(client, mock_review, auth_headers):
+def test_update_review(client, mock_review, login_user, mock_user):
     """Test updating an existing review."""
-    # Given
+    # Given - Update mock_review to set user_id to the logged in user
+    client.application.extensions['pymongo'].db.reviews.update_one(
+        {"_id": mock_review["_id"]},
+        {"$set": {"user_id": str(mock_user["_id"])}}
+    )
+    
     update_data = {
-        "cleanliness": 2,
-        "privacy": 3,
-        "accessibility": 4,
-        "best_for": "both",
+        "rating": 2,
         "comment": "Updated review comment"
     }
     
     # When
-    response = client.put(
+    response = login_user.put(
         f"/api/reviews/{mock_review['_id']}",
         data=json.dumps(update_data),
-        content_type="application/json",
-        headers=auth_headers
+        content_type="application/json"
     )
     
     # Then
@@ -158,26 +168,22 @@ def test_update_review(client, mock_review, auth_headers):
     reviews = json.loads(bathroom_response.json["reviews"])
     updated_review = reviews[0]
     assert updated_review["comment"] == "Updated review comment"
-    assert updated_review["ratings"]["cleanliness"] == 2
+    assert updated_review["rating"] == 2
 
 
-def test_update_nonexistent_review(client, auth_headers):
+def test_update_nonexistent_review(client, login_user):
     """Test updating a non-existent review returns 404."""
     # Given
     update_data = {
-        "cleanliness": 3,
-        "privacy": 3,
-        "accessibility": 3,
-        "best_for": "number 1",
+        "rating": 3,
         "comment": "Won't update"
     }
     
     # When
-    response = client.put(
+    response = login_user.put(
         f"/api/reviews/{ObjectId()}",
         data=json.dumps(update_data),
-        content_type="application/json",
-        headers=auth_headers
+        content_type="application/json"
     )
     
     # Then
@@ -189,10 +195,7 @@ def test_update_review_unauthorized(client, mock_review):
     """Test updating a review without authentication fails."""
     # Given
     update_data = {
-        "cleanliness": 3,
-        "privacy": 3,
-        "accessibility": 3,
-        "best_for": "number 1",
+        "rating": 3,
         "comment": "Unauthorized update"
     }
     
@@ -204,16 +207,44 @@ def test_update_review_unauthorized(client, mock_review):
     )
     
     # Then
-    assert response.status_code == 401
+    assert response.status_code == 401 or response.status_code == 302  # 302 if redirected to login
 
 
-def test_delete_review(client, mock_review, auth_headers, mock_bathroom):
-    """Test deleting a review."""
-    # When
-    response = client.delete(
-        f"/api/reviews/{mock_review['_id']}",
-        headers=auth_headers
+def test_update_review_wrong_user(client, mock_review, login_user):
+    """Test updating a review belonging to another user fails."""
+    # Given - Ensure the review belongs to a different user
+    client.application.extensions['pymongo'].db.reviews.update_one(
+        {"_id": mock_review["_id"]},
+        {"$set": {"user_id": str(ObjectId())}}  # Random user ID
     )
+    
+    update_data = {
+        "rating": 3,
+        "comment": "Can't update another user's review"
+    }
+    
+    # When
+    response = login_user.put(
+        f"/api/reviews/{mock_review['_id']}",
+        data=json.dumps(update_data),
+        content_type="application/json"
+    )
+    
+    # Then
+    assert response.status_code == 403
+    assert "error" in response.json
+
+
+def test_delete_review(client, mock_review, login_user, mock_bathroom, mock_user):
+    """Test deleting a review."""
+    # Given - Update mock_review to set user_id to the logged in user
+    client.application.extensions['pymongo'].db.reviews.update_one(
+        {"_id": mock_review["_id"]},
+        {"$set": {"user_id": str(mock_user["_id"])}}
+    )
+    
+    # When
+    response = login_user.delete(f"/api/reviews/{mock_review['_id']}")
     
     # Then
     assert response.status_code == 200
@@ -224,13 +255,10 @@ def test_delete_review(client, mock_review, auth_headers, mock_bathroom):
     assert len(reviews) == 0
 
 
-def test_delete_nonexistent_review(client, auth_headers):
+def test_delete_nonexistent_review(client, login_user):
     """Test deleting a non-existent review returns 404."""
     # When
-    response = client.delete(
-        f"/api/reviews/{ObjectId()}",
-        headers=auth_headers
-    )
+    response = login_user.delete(f"/api/reviews/{ObjectId()}")
     
     # Then
     assert response.status_code == 404
@@ -240,9 +268,23 @@ def test_delete_nonexistent_review(client, auth_headers):
 def test_delete_review_unauthorized(client, mock_review):
     """Test deleting a review without authentication fails."""
     # When
-    response = client.delete(
-        f"/api/reviews/{mock_review['_id']}"
-    )
+    response = client.delete(f"/api/reviews/{mock_review['_id']}")
     
     # Then
-    assert response.status_code == 401 
+    assert response.status_code == 401 or response.status_code == 302  # 302 if redirected to login
+
+
+def test_delete_review_wrong_user(client, mock_review, login_user):
+    """Test deleting a review belonging to another user fails."""
+    # Given - Ensure the review belongs to a different user
+    client.application.extensions['pymongo'].db.reviews.update_one(
+        {"_id": mock_review["_id"]},
+        {"$set": {"user_id": str(ObjectId())}}  # Random user ID
+    )
+    
+    # When
+    response = login_user.delete(f"/api/reviews/{mock_review['_id']}")
+    
+    # Then
+    assert response.status_code == 403
+    assert "error" in response.json 

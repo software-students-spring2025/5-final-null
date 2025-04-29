@@ -100,20 +100,14 @@ def test_review_model_creation():
     review_doc = Review.create_document(
         bathroom_id=bathroom_id,
         user_id=user_id,
-        cleanliness=4,
-        privacy=3,
-        accessibility=5,
-        best_for="number 1",
+        rating=4,
         comment="Great bathroom!"
     )
     
     # Then
     assert review_doc["bathroom_id"] == bathroom_id
     assert review_doc["user_id"] == user_id
-    assert review_doc["ratings"]["cleanliness"] == 4
-    assert review_doc["ratings"]["privacy"] == 3
-    assert review_doc["ratings"]["accessibility"] == 5
-    assert review_doc["best_for"] == "number 1"
+    assert review_doc["rating"] == 4
     assert review_doc["comment"] == "Great bathroom!"
     assert "created_at" in review_doc
 
@@ -125,10 +119,7 @@ def test_review_model_invalid_rating():
         Review.create_document(
             bathroom_id=str(ObjectId()),
             user_id=str(ObjectId()),
-            cleanliness=6,  # Should be 1-5
-            privacy=3,
-            accessibility=3,
-            best_for="number 1",
+            rating=6,  # Should be 1-5
             comment="Invalid rating"
         )
     
@@ -136,10 +127,7 @@ def test_review_model_invalid_rating():
         Review.create_document(
             bathroom_id=str(ObjectId()),
             user_id=str(ObjectId()),
-            cleanliness=3,
-            privacy=0,  # Should be 1-5
-            accessibility=3,
-            best_for="number 1",
+            rating=0,  # Should be 1-5
             comment="Invalid rating"
         )
 
@@ -150,13 +138,10 @@ def test_review_model_empty_comment():
     review_doc = Review.create_document(
         bathroom_id=str(ObjectId()),
         user_id=str(ObjectId()),
-        cleanliness=3,
-        privacy=4,
-        accessibility=5,
-        best_for="both",
+        rating=4,
         comment=""  # Empty comment should be allowed
     )
     
     # Then
     assert review_doc["comment"] == ""
-    assert review_doc["ratings"]["cleanliness"] == 3 
+    assert review_doc["rating"] == 4 
