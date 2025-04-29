@@ -79,10 +79,10 @@ def create_app():
         except PyMongoError as e:
             return jsonify({"error": str(e)}), 500
 
-    @app.route("/login", methods=["GET"])
-    def login_page():
-        """Render the login page."""
-        return render_template("login.html")
+    @app.route("/register", methods=["GET"])
+    def register_page():
+        """Render the sign up page."""
+        return render_template("sign_up.html")
     
     @app.route("/api/auth/login", methods=["POST"])
     def login():
@@ -183,8 +183,7 @@ def create_app():
                 is_accessible=data.get('is_accessible', False),
                 gender=data.get('gender', 'all')
             )
-            bathroom_doc['created_by'] = get_jwt_identity()
-
+            
             # Insert into database
             result = get_db().bathrooms.insert_one(bathroom_doc)
             return jsonify({
@@ -410,7 +409,7 @@ def create_app():
             return jsonify({"bathrooms": json_util.dumps(bathrooms)}), 200
         except PyMongoError as e:
             return jsonify({"error": str(e)}), 500
-    
+
     @app.route("/profile", methods=["GET"])
     @jwt_required()
     def profile():
@@ -431,8 +430,7 @@ def create_app():
             bathroom_requests=bathroom_requests,
             reviews=reviews
         )
-
-
+    
     return app
 
 if __name__ == "__main__":
