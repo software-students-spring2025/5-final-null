@@ -138,10 +138,14 @@ def mock_review(db, mock_bathroom, mock_user_id):
         "_id": ObjectId(),
         "bathroom_id": str(mock_bathroom["_id"]),
         "user_id": mock_user_id,
-        "rating": 4,
+        "ratings": {
+            "cleanliness": 4,
+            "privacy": 4,
+            "accessibility": 4
+        },
+        "best_for": "number 1",
         "comment": "Test review comment",
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow()
+        "created_at": datetime.utcnow()
     }
     result = db.reviews.insert_one(review)
     review["_id"] = result.inserted_id
