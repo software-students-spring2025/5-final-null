@@ -14,6 +14,7 @@ from schemas import init_app, init_db, Bathroom, Review, User, get_db
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 from geopy.extra.rate_limiter import RateLimiter
+from seed_bathrooms import seed_bathrooms
 
 # Load environment variables
 load_dotenv()
@@ -45,10 +46,12 @@ def create_app():
     # Initialize database
     init_app(app)
     
-    # Only initialize database indexes if not in testing mode
+    # Only initialize database indexes and seed data if not in testing mode
     if not testing:
         with app.app_context():
             init_db(app)
+            # Seed the database with initial bathroom data
+            seed_bathrooms(get_db())
     
     # Error handler
     @app.errorhandler(404)
