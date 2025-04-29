@@ -122,6 +122,15 @@ def create_app():
         response = make_response(jsonify({"message": "Logged out"}))
         response.delete_cookie('access_token_cookie')
         return response
+
+    @app.route("/profile", methods=["GET"])
+    @jwt_required()
+    def profile_page():
+        """Render the profile page."""
+        user_id = get_jwt_identity()
+        user_reviews = list(get_db().reviews.find({"user_id": user_id}))
+
+        return render_template("profile.html", reviews=user_reviews)
     
     @app.route("/api/users/me", methods=["GET"])
     @jwt_required()
