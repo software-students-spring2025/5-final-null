@@ -127,39 +127,14 @@
 <body>
   <nav>
     <ul>
-      {% if logged_in %}
         <li><a href="{{ url_for('home') }}">Map</a></li>
-        <li><a href="{{ url_for('profile_page') }}">Profile</a></li>
-        <li><a href="{{ url_for('logout') }}">Logout</a></li>
-      {% else %}
-        <li><a href="{{ url_for('home') }}">Map</a></li>
-        <li><a href="{{ url_for('login_page') }}">Sign In</a></li>
-        <li><a href="{{ url_for('register_page') }}">Sign Up</a></li>
-      {% endif %}
+        <li><a href="#" onclick="handleLogout()">Logout</a></li>
     </ul>
   </nav>
 
   <div class="container">
     <div class="profile-content">
       <h2>Profile</h2>
-
-      <h3>{{ bathroom_requests|length }} submitted Requests</h3>
-      <ul>
-        {% for bathroom in bathroom_requests %}
-          <li>
-            {{ bathroom.building }} {{ bathroom.floor }}F
-            {% if bathroom.status %}
-              <span class="status {% if bathroom.status == 'Pending' %}pending{% elif bathroom.status == 'Approved' %}approved{% elif bathroom.status == 'Denied' %}denied{% endif %}">
-                {{ bathroom.status }}
-              </span>
-            {% else %}
-              <span class="status pending">Pending...</span>
-            {% endif %}
-          </li>
-        {% else %}
-          <li>No submissions yet.</li>
-        {% endfor %}
-      </ul>
 
       <h3>{{ reviews|length }} ratings across campus</h3>
       <ul>
@@ -171,11 +146,24 @@
       </ul>
     </div>
 
+    {% set level = (reviews|length // 5) + 1 %}
+
     <div class="badge">
       <div class="label">You are a:</div>
-      <div class="level">Level 1</div>
+      <div class="level">Level {{ level }}</div>
       <div class="title">Flusher</div>
     </div>
   </div>
+
+  <script>
+    async function handleLogout() {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "same-origin"
+      });
+      window.location.href = "/login";
+    }
+  </script>
+  
 </body>
 </html>
