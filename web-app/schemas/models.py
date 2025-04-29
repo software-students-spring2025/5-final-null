@@ -31,6 +31,8 @@ UserDocument = Dict[str, Any]
 class Bathroom:
     """Bathroom model representing a restroom location."""
     
+    VALID_GENDERS = ["male", "female", "all"]
+    
     @staticmethod
     def create_document(
         building: str, 
@@ -52,7 +54,18 @@ class Bathroom:
             
         Returns:
             A bathroom document ready for database insertion
+            
+        Raises:
+            ValueError: If floor is negative or gender is invalid
         """
+        # Validate floor is positive
+        if floor < 0:
+            raise ValueError("Floor number must be a positive integer")
+        
+        # Validate gender is acceptable
+        if gender not in Bathroom.VALID_GENDERS:
+            raise ValueError(f"Gender must be one of: {', '.join(Bathroom.VALID_GENDERS)}")
+            
         return {
             "building": building,
             "floor": floor,
@@ -69,6 +82,8 @@ class Bathroom:
 
 class Review:
     """Review model for bathroom reviews."""
+    
+    VALID_RATING_RANGE = range(1, 6)  # 1-5 inclusive
     
     @staticmethod
     def create_document(
@@ -93,7 +108,19 @@ class Review:
             
         Returns:
             A review document ready for database insertion
+            
+        Raises:
+            ValueError: If any rating is not in the range 1-5
         """
+        # Validate ratings are in the correct range
+        for rating_name, rating_value in [
+            ("cleanliness", cleanliness), 
+            ("privacy", privacy), 
+            ("accessibility", accessibility)
+        ]:
+            if rating_value not in Review.VALID_RATING_RANGE:
+                raise ValueError(f"{rating_name.capitalize()} rating must be between 1 and 5")
+        
         return {
             "bathroom_id": bathroom_id,
             "user_id": user_id,
