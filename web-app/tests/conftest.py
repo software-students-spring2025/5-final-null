@@ -41,8 +41,16 @@ def mock_get_db(monkeypatch):
     
     # Patch both the init_db function and get_db function
     import schemas.models
+    import schemas.database
+    
+    # Create a proper patch that will be applied globally
     monkeypatch.setattr('schemas.database.get_db', mock_get_db_func)
+    monkeypatch.setattr('schemas.models.get_db', mock_get_db_func)
     monkeypatch.setattr('schemas.models.init_db', lambda app: None)  # Do nothing
+    
+    # Ensure Flask's g object doesn't interfere
+    if hasattr(g, 'db'):
+        delattr(g, 'db')
     
     return mock_db.db
 
@@ -70,7 +78,14 @@ def app():
         "MONGO_DBNAME": "test_bathroom_map"
     })
     
-    return flask_app
+    # Start app context so patches apply inside tests
+    ctx = flask_app.app_context()
+    ctx.push()
+    
+    yield flask_app
+    
+    # Clean up after test is done
+    ctx.pop()
 
 
 @pytest.fixture
@@ -112,8 +127,9 @@ def mock_user(db, mock_user_id):
 @pytest.fixture
 def mock_bathroom(db):
     """Create a mock bathroom in the database."""
+    bathroom_id = ObjectId()
     bathroom = {
-        "_id": ObjectId(),
+        "_id": bathroom_id,
         "building": "Test Building",
         "floor": 1,
         "location": {
@@ -126,8 +142,7 @@ def mock_bathroom(db):
         "updated_at": datetime.utcnow(),
         "created_by": str(ObjectId())
     }
-    result = db.bathrooms.insert_one(bathroom)
-    bathroom["_id"] = result.inserted_id
+    db.bathrooms.insert_one(bathroom)  # Insert directly
     return bathroom
 
 
@@ -147,8 +162,7 @@ def mock_review(db, mock_bathroom, mock_user_id):
         "comment": "Test review comment",
         "created_at": datetime.utcnow()
     }
-    result = db.reviews.insert_one(review)
-    review["_id"] = result.inserted_id
+    db.reviews.insert_one(review)
     return review
 
 
@@ -161,4 +175,15 @@ def auth_headers(app, mock_user_id):
             identity=mock_user_id,
             expires_delta=timedelta(hours=1)
         )
-        return {"Authorization": f"Bearer {access_token}"} 
+        return {"Authorization": f"Bearer {access_token}"}
+
+
+@pytest.fixture
+def reset_db(db):
+    """Reset the database state before/after tests."""
+    # Clear all collections before the test
+    for collection_name in db.list_collection_names():
+        db[collection_name].delete_many({})
+    
+    # Return the clean database
+    return db 
