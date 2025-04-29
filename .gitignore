@@ -150,3 +150,6 @@ cython_debug/
 
 .env 
 api/.env
+
+deploy_key
+deploy_key.pub
