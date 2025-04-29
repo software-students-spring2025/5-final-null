@@ -1,41 +1,113 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stall Street Journal</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stall Street Journal</title>
+
+  <!-- Google Maps -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDBsakl8uQ5aAW2z2uYrwWgyV2UizszUGc&callback=initMap" async defer></script>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Arial', sans-serif;
+      background-color: #1e3554;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    nav {
+      background-color: #f7eedd;
+      padding: 15px 30px;
+    }
+
+    nav ul {
+      list-style: none;
+      display: flex;
+      gap: 25px;
+      padding: 0;
+      margin: 0;
+    }
+
+    nav ul li a {
+      text-decoration: none;
+      color: #1e3554;
+      font-weight: bold;
+      font-size: 16px;
+    }
+
+    nav ul li a:hover {
+      color: #5b5b5b;
+    }
+
+    .title {
+      color: #f7eedd;
+      font-size: 28px;
+      font-weight: bold;
+      padding: 20px 30px 10px 30px;
+      background-color: #1e3554;
+    }
+
+    #map {
+      flex-grow: 1;
+      margin: 0 30px 30px 30px;
+      border-radius: 20px;
+    }
+  </style>
+
+  <script>
+    function initMap() {
+      const nyc = { lat: 40.7128, lng: -74.0060 };
+      const map = new google.maps.Map(document.getElementById("map"), {
+        zoom: 13,
+        center: nyc,
+      });
+
+      const marker = new google.maps.Marker({
+        position: { lat: 40.730610, lng: -73.935242 },
+        map: map,
+        title: "Toilet 1"
+      });
+
+      const infowindow = new google.maps.InfoWindow({
+        content: "<h3>Toilet 1</h3><p>⭐️⭐️⭐️⭐️ (4/5)</p>",
+      });
+
+      marker.addListener("click", () => {
+        infowindow.open(map, marker);
+      });
+    }
+  </script>
 </head>
+
 <body>
-    <nav>
-        <ul>
-            {% if logged_in %}
-                <li><button onclick="logout()">Logout</button></li>
-            {% else %}
-                <li><a href="{{ url_for('login_page') }}">Login</a></li>
-                <li><a href="{{ url_for('register_page') }}">Register</a></li>
-            {% endif %}
-        </ul>
-    </nav>
+  <!-- Top navigation bar -->
+  <nav>
+    <ul>
+      {% if logged_in %}
+        <li><a href="{{ url_for('home') }}">Map</a></li>
+        <li><a href="{{ url_for('get_current_user') }}">Profile</a></li>
+        <li><a href="{{ url_for('logout') }}">Logout</a></li>
+      {% else %}
+        <li><a href="{{ url_for('home') }}">Map</a></li>
+        <li><a href="{{ url_for('login_page') }}">Sign In</a></li>
+        <li><a href="{{ url_for('register_page') }}">Sign Up</a></li>
+      {% endif %}
+    </ul>
+  </nav>
 
-    <div id="content">
-        {% if logged_in %}
-            <h1>Welcome back!</h1>
-        {% else %}
-            <h1>Welcome to Stall Street Journal!</h1>
-            <a href="{{ url_for('login_page') }}">Login</a> or 
-            <a href="{{ url_for('register_page') }}">Sign up</a>
-        {% endif %}
-    </div>
+  <!-- Page title -->
+  <div class="title">
+    {% if logged_in %}
+      Welcome back to the Stall Street Journal!
+    {% else %}
+      Welcome to the Stall Street Journal!
+    {% endif %}
+  </div>
 
-    <script>
-        function logout() {
-            fetch("/api/auth/logout", {
-                method: "POST",
-                credentials: "include"
-            }).then(() => {
-                window.location.href = "/";
-            });
-        }
-    </script>
+  <!-- Full-page map -->
+  <div id="map"></div>
 </body>
 </html>
