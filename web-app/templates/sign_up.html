@@ -5,23 +5,39 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Stall Street Journal - Sign Up</title>
   <style>
-    .logo {
-        width: 50% !important;       
-        height: auto;
-        display: block;
-        margin-bottom: 20px;
-        background-color: red;
-    }
-
     body {
       margin: 0;
       font-family: 'Arial', sans-serif;
       background-color: #f0f0f0;
     }
 
+    nav {
+      background-color: #f7eedd;
+      padding: 15px 30px;
+    }
+
+    nav ul {
+      list-style: none;
+      display: flex;
+      gap: 25px;
+      padding: 0;
+      margin: 0;
+    }
+
+    nav ul li a {
+      text-decoration: none;
+      color: #1e3554;
+      font-weight: bold;
+      font-size: 16px;
+    }
+
+    nav ul li a:hover {
+      color: #5b5b5b;
+    }
+
     .container {
       display: flex;
-      height: 100vh;
+      height: calc(100vh - 60px); /* subtract nav bar height */
     }
 
     .left-pane {
@@ -103,11 +119,20 @@
   </style>
 </head>
 <body>
+  <!-- Top Nav Bar -->
+  <nav>
+    <ul>
+      <li><a href="{{ url_for('home') }}">Map</a></li>
+      <li><a href="{{ url_for('login_page') }}">Sign In</a></li>
+    </ul>
+  </nav>
+
+  <!-- Split Layout -->
   <div class="container">
     <div class="left-pane">
       <div class="form-box">
         <h2>Unlock the Stall Street</h2>
-        <form id="signup-form"> <!-- Flask route -->
+        <form id="signup-form">
           <div class="form-group">
             <label for="name">name</label>
             <input type="text" id="name" name="name" required />
@@ -129,17 +154,18 @@
     </div>
 
     <div class="right-pane">
-      <img class="logo" src="logo.png" />
+      <img class="logo" src="logo.png" alt="Logo" />
     </div>
   </div>
+
   <script>
     document.getElementById("signup-form").addEventListener("submit", async function (e) {
       e.preventDefault();
-  
+
       const name = document.getElementById("name").value;
       const email = document.getElementById("email").value;
       const password = document.getElementById("password").value;
-  
+
       try {
         const res = await fetch("/api/auth/register", {
           method: "POST",
@@ -148,9 +174,9 @@
           },
           body: JSON.stringify({ name, email, password }),
         });
-  
+
         const data = await res.json();
-  
+
         if (res.ok) {
           window.location.href = "/login";
         } else {
@@ -160,7 +186,7 @@
         console.error(err);
         alert("An error occurred");
       }
-    })
+    });
   </script>
 </body>
 </html>

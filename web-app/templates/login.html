@@ -11,9 +11,33 @@
       background-color: #f0f0f0;
     }
 
+    nav {
+      background-color: #f7eedd;
+      padding: 15px 30px;
+    }
+
+    nav ul {
+      list-style: none;
+      display: flex;
+      gap: 25px;
+      padding: 0;
+      margin: 0;
+    }
+
+    nav ul li a {
+      text-decoration: none;
+      color: #1e3554;
+      font-weight: bold;
+      font-size: 16px;
+    }
+
+    nav ul li a:hover {
+      color: #5b5b5b;
+    }
+
     .container {
       display: flex;
-      height: 100vh;
+      height: calc(100vh - 60px); /* subtract navbar height */
     }
 
     .left-pane {
@@ -97,6 +121,15 @@
   </style>
 </head>
 <body>
+  <!-- Nav bar -->
+  <nav>
+    <ul>
+      <li><a href="{{ url_for('home') }}">Map</a></li>
+      <li><a href="{{ url_for('register_page') }}">Sign Up</a></li>
+    </ul>
+  </nav>
+
+  <!-- Main container -->
   <div class="container">
     <div class="left-pane">
       <img class="logo" src="logo.png" />
@@ -122,13 +155,14 @@
       </div>
     </div>
   </div>
+
   <script>
     document.getElementById("login-form").addEventListener("submit", async function (e) {
       e.preventDefault();
-  
+
       const email = document.getElementById("email").value;
       const password = document.getElementById("password").value;
-  
+
       try {
         const res = await fetch("/api/auth/login", {
           method: "POST",
@@ -137,9 +171,9 @@
           },
           body: JSON.stringify({ email, password }),
         });
-  
+
         const data = await res.json();
-  
+
         if (res.ok) {
           window.location.href = "/";
         } else {
@@ -149,7 +183,7 @@
         console.error(err);
         alert("An error occurred");
       }
-    })
+    });
   </script>
 </body>
 </html>
