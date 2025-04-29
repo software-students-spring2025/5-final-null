@@ -136,7 +136,12 @@ def mock_review(setup_db, mock_bathroom, mock_user_id):
         "_id": ObjectId(),
         "bathroom_id": str(mock_bathroom["_id"]),
         "user_id": mock_user_id,
-        "rating": 4,
+        "ratings": {
+            "cleanliness": 4,
+            "privacy": 3,
+            "accessibility": 4
+        },
+        "best_for": "Quick stop",
         "comment": "Test review comment",
         "created_at": datetime.utcnow()
     }

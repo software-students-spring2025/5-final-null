@@ -16,7 +16,10 @@ def test_get_reviews(client, mock_bathroom, mock_review):
     reviews = json.loads(data["reviews"])
     assert len(reviews) == 1
     assert reviews[0]["comment"] == "Test review comment"
-    assert reviews[0]["rating"] == 4
+    assert reviews[0]["ratings"]["cleanliness"] == 4
+    assert reviews[0]["ratings"]["privacy"] == 3
+    assert reviews[0]["ratings"]["accessibility"] == 4
+    assert reviews[0]["best_for"] == "Quick stop"
 
 
 def test_get_reviews_nonexistent_bathroom(client):
@@ -40,7 +43,10 @@ def test_get_review(client, mock_review):
     assert "review" in data
     review = json.loads(data["review"])
     assert review["comment"] == "Test review comment"
-    assert review["rating"] == 4
+    assert review["ratings"]["cleanliness"] == 4
+    assert review["ratings"]["privacy"] == 3
+    assert review["ratings"]["accessibility"] == 4
+    assert review["best_for"] == "Quick stop"
 
 
 def test_get_nonexistent_review(client):
@@ -57,7 +63,10 @@ def test_create_review(client, mock_bathroom, login_user):
     """Test creating a new review."""
     # Given
     review_data = {
-        "rating": 5,
+        "cleanliness": 5,
+        "privacy": 4,
+        "accessibility": 3,
+        "best_for": "Emergency",
         "comment": "Great bathroom!"
     }
     
@@ -77,14 +86,20 @@ def test_create_review(client, mock_bathroom, login_user):
     reviews = json.loads(bathroom_response.json["reviews"])
     new_review = [r for r in reviews if r["comment"] == "Great bathroom!"]
     assert len(new_review) == 1
-    assert new_review[0]["rating"] == 5
+    assert new_review[0]["ratings"]["cleanliness"] == 5
+    assert new_review[0]["ratings"]["privacy"] == 4
+    assert new_review[0]["ratings"]["accessibility"] == 3
+    assert new_review[0]["best_for"] == "Emergency"
 
 
 def test_create_review_nonexistent_bathroom(client, login_user):
     """Test creating a review for a non-existent bathroom fails."""
     # Given
     review_data = {
-        "rating": 5,
+        "cleanliness": 5,
+        "privacy": 4,
+        "accessibility": 3,
+        "best_for": "Emergency",
         "comment": "Won't be created"
     }
     
@@ -104,7 +119,10 @@ def test_create_review_invalid_rating(client, mock_bathroom, login_user):
     """Test creating a review with invalid rating fails."""
     # Given - Rating out of range
     review_data = {
-        "rating": 6,  # Should be 1-5
+        "cleanliness": 6,  # Should be 1-5
+        "privacy": 4,
+        "accessibility": 3,
+        "best_for": "Emergency",
         "comment": "Invalid rating"
     }
     
@@ -118,14 +136,17 @@ def test_create_review_invalid_rating(client, mock_bathroom, login_user):
     # Then
     assert response.status_code == 400
     assert "error" in response.json
-    assert "Rating" in response.json["error"]  # Check for "Rating" instead of "rating"
+    assert "Cleanliness" in response.json["error"]
 
 
 def test_create_review_unauthorized(client, mock_bathroom):
     """Test creating a review without authentication fails."""
     # Given
     review_data = {
-        "rating": 5,
+        "cleanliness": 5,
+        "privacy": 4,
+        "accessibility": 3,
+        "best_for": "Emergency",
         "comment": "Unauthorized review"
     }
     
@@ -149,7 +170,10 @@ def test_update_review(client, mock_review, login_user, mock_user, setup_db):
     )
     
     update_data = {
-        "rating": 2,
+        "cleanliness": 2,
+        "privacy": 3,
+        "accessibility": 1,
+        "best_for": "Not recommended",
         "comment": "Updated review comment"
     }
     
@@ -168,14 +192,20 @@ def test_update_review(client, mock_review, login_user, mock_user, setup_db):
     reviews = json.loads(bathroom_response.json["reviews"])
     updated_review = reviews[0]
     assert updated_review["comment"] == "Updated review comment"
-    assert updated_review["rating"] == 2
+    assert updated_review["ratings"]["cleanliness"] == 2
+    assert updated_review["ratings"]["privacy"] == 3
+    assert updated_review["ratings"]["accessibility"] == 1
+    assert updated_review["best_for"] == "Not recommended"
 
 
 def test_update_nonexistent_review(client, login_user):
     """Test updating a non-existent review returns 404."""
     # Given
     update_data = {
-        "rating": 3,
+        "cleanliness": 3,
+        "privacy": 3,
+        "accessibility": 3,
+        "best_for": "Average",
         "comment": "Won't update"
     }
     
@@ -195,7 +225,10 @@ def test_update_review_unauthorized(client, mock_review):
     """Test updating a review without authentication fails."""
     # Given
     update_data = {
-        "rating": 3,
+        "cleanliness": 3,
+        "privacy": 3,
+        "accessibility": 3,
+        "best_for": "Average",
         "comment": "Unauthorized update"
     }
     
@@ -219,7 +252,10 @@ def test_update_review_wrong_user(client, mock_review, login_user, setup_db):
     )
     
     update_data = {
-        "rating": 3,
+        "cleanliness": 3,
+        "privacy": 3,
+        "accessibility": 3,
+        "best_for": "Average",
         "comment": "Can't update another user's review"
     }
     

@@ -315,23 +315,43 @@ def create_app():
             if not get_db().bathrooms.find_one({"_id": ObjectId(bathroom_id)}):
                 return jsonify({"error": "Bathroom not found"}), 404
             
-            # Create review document
-            review_doc = Review.create_document(
-                bathroom_id=bathroom_id,
-                user_id=user_id,
-                cleanliness=int(data['cleanliness']),
-                privacy=int(data['privacy']),
-                accessibility=int(data['accessibility']),
-                best_for=data['best_for'],
-                comment=data.get('comment')
-            )
+            try:
+                # Create review document
+                review_doc = Review.create_document(
+                    bathroom_id=bathroom_id,
+                    user_id=user_id,
+                    cleanliness=int(data['cleanliness']),
+                    privacy=int(data['privacy']),
+                    accessibility=int(data['accessibility']),
+                    best_for=data['best_for'],
+                    comment=data.get('comment')
+                )
+            except ValueError as ve:
+                return jsonify({"error": str(ve)}), 400
             
             # Insert into database
             result = get_db().reviews.insert_one(review_doc)
+            review_id = str(result.inserted_id)
+            
+            # Retrieve the created review to return it
+            created_review = get_db().reviews.find_one({"_id": result.inserted_id})
+            
             return jsonify({
                 "message": "Review created successfully",
-                "review_id": str(result.inserted_id)
+                "review_id": review_id,
+                "review": json_util.dumps(created_review)
             }), 201
+        except PyMongoError as e:
+            return jsonify({"error": str(e)}), 500
+    
+    @app.route("/api/reviews/<review_id>", methods=["GET"])
+    def get_review(review_id):
+        """Get a specific review by ID."""
+        try:
+            review = get_db().reviews.find_one({"_id": ObjectId(review_id)})
+            if not review:
+                return jsonify({"error": "Review not found"}), 404
+            return jsonify({"review": json_util.dumps(review)}), 200
         except PyMongoError as e:
             return jsonify({"error": str(e)}), 500
     
@@ -356,11 +376,32 @@ def create_app():
             # Prepare update data
             update_data = {}
             if 'cleanliness' in data:
-                update_data['ratings.cleanliness'] = int(data['cleanliness'])
+                try:
+                    cleanliness = int(data['cleanliness'])
+                    if cleanliness not in Review.VALID_RATING_RANGE:
+                        return jsonify({"error": "Cleanliness rating must be between 1 and 5"}), 400
+                    update_data['ratings.cleanliness'] = cleanliness
+                except ValueError:
+                    return jsonify({"error": "Cleanliness rating must be a number"}), 400
+                
             if 'privacy' in data:
-                update_data['ratings.privacy'] = int(data['privacy'])
+                try:
+                    privacy = int(data['privacy'])
+                    if privacy not in Review.VALID_RATING_RANGE:
+                        return jsonify({"error": "Privacy rating must be between 1 and 5"}), 400
+                    update_data['ratings.privacy'] = privacy
+                except ValueError:
+                    return jsonify({"error": "Privacy rating must be a number"}), 400
+                
             if 'accessibility' in data:
-                update_data['ratings.accessibility'] = int(data['accessibility'])
+                try:
+                    accessibility = int(data['accessibility'])
+                    if accessibility not in Review.VALID_RATING_RANGE:
+                        return jsonify({"error": "Accessibility rating must be between 1 and 5"}), 400
+                    update_data['ratings.accessibility'] = accessibility
+                except ValueError:
+                    return jsonify({"error": "Accessibility rating must be a number"}), 400
+                
             if 'best_for' in data:
                 update_data['best_for'] = data['best_for']
             if 'comment' in data:

@@ -10,6 +10,10 @@ def init_db(app) -> None:
     Args:
         app: The Flask application instance
     """
+    # Skip creating real indexes in test mode
+    if app.config.get('TESTING', False):
+        return
+        
     with app.app_context():
         client = MongoClient(current_app.config['MONGO_URI'])
         db = client[current_app.config['MONGO_DBNAME']]
@@ -89,7 +93,10 @@ class Review:
     def create_document(
         bathroom_id: str,
         user_id: str,
-        rating: int,
+        cleanliness: int,
+        privacy: int,
+        accessibility: int,
+        best_for: str,
         comment: Optional[str] = None
     ) -> ReviewDocument:
         """Create a new review document.
@@ -97,23 +104,36 @@ class Review:
         Args:
             bathroom_id: ID of the bathroom being reviewed
             user_id: ID of the user submitting the review
-            rating: Overall rating (1-5)
+            cleanliness: Cleanliness rating (1-5)
+            privacy: Privacy rating (1-5)
+            accessibility: Accessibility rating (1-5)
+            best_for: Purpose or best use case for the bathroom
             comment: Optional review comment
             
         Returns:
             A review document ready for database insertion
             
         Raises:
-            ValueError: If rating is not in the range 1-5
+            ValueError: If any rating is not in the range 1-5
         """
-        # Validate rating is in the correct range
-        if rating not in Review.VALID_RATING_RANGE:
-            raise ValueError("Rating must be between 1 and 5")
+        # Validate ratings are in the correct range
+        for rating_name, rating_value in [
+            ("Cleanliness", cleanliness),
+            ("Privacy", privacy),
+            ("Accessibility", accessibility)
+        ]:
+            if rating_value not in Review.VALID_RATING_RANGE:
+                raise ValueError(f"{rating_name} rating must be a number between 1 and 5")
         
         return {
             "bathroom_id": bathroom_id,
             "user_id": user_id,
-            "rating": rating,
+            "ratings": {
+                "cleanliness": cleanliness,
+                "privacy": privacy,
+                "accessibility": accessibility
+            },
+            "best_for": best_for,
             "comment": comment,
             "created_at": datetime.utcnow()
         }
