@@ -32,9 +32,8 @@ def test_register_success(client, db):
     assert created_user["name"] == "New User"
     assert check_password_hash(created_user["password_hash"], "securepassword")
     
-    # Verify login session was created
-    with client.session_transaction() as sess:
-        assert "_user_id" in sess
+    # JWT auth doesn't use session, so just check for access_token in response
+    assert "access_token" in response.json
 
 
 def test_register_existing_user(client, mock_user):
@@ -99,9 +98,8 @@ def test_login_success(client, mock_user):
     assert response.status_code == 200
     assert "user_id" in response.json
     
-    # Verify login session was created
-    with client.session_transaction() as sess:
-        assert "_user_id" in sess
+    # For JWT auth, check that a cookie was set
+    assert "access_token_cookie" in [cookie.name for cookie in client.cookie_jar]
 
 
 def test_login_invalid_credentials(client, mock_user):
@@ -148,27 +146,31 @@ def test_login_nonexistent_user(client):
 
 def test_logout(client, login_user):
     """Test logging out a user."""
-    # login_user fixture has already logged in the user
+    # Create a request with the auth client
+    auth_client = login_user
     
-    # Verify we're logged in
-    with client.session_transaction() as sess:
-        assert "_user_id" in sess
+    # Set a cookie to test logout
+    client.set_cookie('localhost.localdomain', 'access_token_cookie', 'test_token')
+    
+    # Ensure cookie is set
+    assert 'access_token_cookie' in [cookie.name for cookie in client.cookie_jar]
     
     # Now logout
     response = client.post("/api/auth/logout")
     
-    # Verify we're logged out
+    # Verify we're logged out by checking cookie is gone
     assert response.status_code == 200
-    with client.session_transaction() as sess:
-        assert "_user_id" not in sess
+    cookies_after = [cookie.name for cookie in client.cookie_jar if cookie.value]
+    assert 'access_token_cookie' not in cookies_after
 
 
-def test_get_current_user(client, login_user):
+def test_get_current_user(client, login_user, mock_user):
     """Test getting the current user profile."""
-    # login_user fixture has already logged in the user
+    # Use the authenticated client from login_user
+    auth_client = login_user
     
     # When
-    response = client.get("/api/users/me")
+    response = auth_client.get("/api/users/me")
     
     # Then
     assert response.status_code == 200

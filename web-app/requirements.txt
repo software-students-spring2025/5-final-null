@@ -9,6 +9,7 @@ pylint==2.15.0
 blinker==1.6.2
 flask-wtf==1.1.1
 werkzeug==2.0.3
+flask-jwt-extended>=4.5.0
 itsdangerous==2.0.1
 Jinja2==3.0.3
 MarkupSafe==2.1.1
