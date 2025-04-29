@@ -1,7 +1,7 @@
 name: Web-App CI/CD
 on:
   push:
-    branches: [main, master, cicd]
+    branches: [main, master, docker-ocean]
     paths:
       - 'web-app/**'
       - '.github/workflows/web-app-ci.yml'

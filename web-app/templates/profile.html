@@ -1,47 +1,46 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Stall Street Journal - Profile</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <style>
     body {
-      background-color: #e3f0f9;
       margin: 0;
-      padding: 0 30px;
+      font-family: 'Arial', sans-serif;
+      background-color: #1e3554;
     }
 
-    header {
-      background-color: #12365d;
-      color: white;
-      padding: 20px;
+    nav {
+      background-color: #f7eedd;
+      padding: 15px 30px;
+    }
+
+    nav ul {
+      list-style: none;
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    header h1 {
+      gap: 25px;
+      padding: 0;
       margin: 0;
-      font-weight: 800;
     }
 
-    .top-buttons {
-      display: flex;
-      gap: 10px;
-    }
-
-    .top-buttons a {
-      background-color: #76a66d;
-      color: white;
-      padding: 8px 14px;
-      border-radius: 10px;
+    nav ul li a {
       text-decoration: none;
-      font-weight: 600;
+      color: #1e3554;
+      font-weight: bold;
+      font-size: 16px;
     }
 
-    main {
+    nav ul li a:hover {
+      color: #5b5b5b;
+    }
+
+    .container {
+      padding: 30px;
       display: flex;
-      margin-top: 30px;
       gap: 40px;
+      color: white;
     }
 
     .profile-content {
@@ -55,11 +54,18 @@
       border-radius: 10px;
       text-align: center;
       font-weight: 600;
+      color: #1e3554;
     }
 
     h2 {
       font-size: 24px;
+      color: #f7eedd;
+      margin-top: 0;
+    }
+
+    h3 {
       margin-top: 30px;
+      color: #f7eedd;
     }
 
     ul {
@@ -96,15 +102,21 @@
 </head>
 
 <body>
-  <header>
-    <h1>Stall Street Journal</h1>
-    <div class="top-buttons">
-      <a href="{{ url_for('home') }}">Map</a>
-      <a href="{{ url_for('logout') }}">Sign Out</a>
-    </div>
-  </header>
+  <nav>
+    <ul>
+      {% if logged_in %}
+        <li><a href="{{ url_for('home') }}">Map</a></li>
+        <li><a href="{{ url_for('profile_page') }}">Profile</a></li>
+        <li><a href="{{ url_for('logout') }}">Logout</a></li>
+      {% else %}
+        <li><a href="{{ url_for('home') }}">Map</a></li>
+        <li><a href="{{ url_for('login_page') }}">Sign In</a></li>
+        <li><a href="{{ url_for('register_page') }}">Sign Up</a></li>
+      {% endif %}
+    </ul>
+  </nav>
 
-  <main>
+  <div class="container">
     <div class="profile-content">
       <h2>Profile</h2>
 
@@ -125,21 +137,15 @@
           <li>No submissions yet.</li>
         {% endfor %}
       </ul>
-      
 
-
-    <h3>{{ reviews|length }} ratings across campus</h3>
-    <ul>
-    {% for review in reviews %}
-        <li>Bathroom ID: {{ review.bathroom_id }}</li>
-    {% else %}
-        <li>No reviews yet.</li>
-    {% endfor %}
-    </ul>
-
-
-
-
+      <h3>{{ reviews|length }} ratings across campus</h3>
+      <ul>
+        {% for review in reviews %}
+          <li>Bathroom ID: {{ review.bathroom_id }}</li>
+        {% else %}
+          <li>No reviews yet.</li>
+        {% endfor %}
+      </ul>
     </div>
 
     <div class="badge">
@@ -147,6 +153,6 @@
       <h2>Level 1</h2>
       Flusher
     </div>
-  </main>
+  </div>
 </body>
 </html>

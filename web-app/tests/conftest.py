@@ -9,19 +9,20 @@ import importlib
 import json
 from werkzeug.security import generate_password_hash
 
-# Import app but not create_app yet
+# Set test environment variables before importing anything
+os.environ["FLASK_ENV"] = "testing"
+os.environ["TESTING"] = "true"
+os.environ["SECRET_KEY"] = "test_secret_key"
+os.environ["MONGO_URI"] = "mongodb://localhost:27017"
+os.environ["MONGO_DBNAME"] = "test_bathroom_map"
+
+# Now import app module
 import app as app_module
 from schemas import init_app
 
 @pytest.fixture(scope="session")
 def app():
     """Create a Flask app fixture for testing."""
-    # Set test environment
-    os.environ["FLASK_ENV"] = "testing"
-    os.environ["SECRET_KEY"] = "test_secret_key"
-    os.environ["MONGO_URI"] = "mongodb://localhost:27017"
-    os.environ["MONGO_DBNAME"] = "test_bathroom_map"
-    
     # Create app
     flask_app = app_module.create_app()
     flask_app.config.update({
@@ -52,31 +53,25 @@ def setup_db(app, monkeypatch):
     mock_client = mongomock.MongoClient()
     mock_db = mock_client["test_bathroom_map"]
     
-    # Set up all required indexes
-    mock_db.users.create_index("email", unique=True)
-    
-    # Create but don't enforce GEOSPHERE index in test mode
-    # (mongomock doesn't fully support it)
-    try:
-        from pymongo import GEOSPHERE
-        mock_db.bathrooms.create_index([("location", "2dsphere")])
-        mock_db.bathrooms.create_index("building")
-        mock_db.reviews.create_index("bathroom_id")
-        mock_db.reviews.create_index("user_id")
-    except Exception:
-        # If indexes fail, continue anyway
-        pass
-    
     # Define mock get_db function to return our mock_db
     def mock_get_db():
         return mock_db
     
-    # Patch the real get_db with our mock
+    # Patch the real get_db with our mock and skip real db initialization BEFORE any test runs
     import schemas.database
     monkeypatch.setattr("schemas.database.get_db", mock_get_db)
-    
-    # Skip real database initialization
     monkeypatch.setattr("schemas.models.init_db", lambda app: None)
+    
+    # Set up all required indexes in mock db
+    mock_db.users.create_index("email", unique=True)
+    
+    # Create indexes for test collections (mongomock doesn't fully support geospatial)
+    try:
+        mock_db.bathrooms.create_index("building")
+        mock_db.reviews.create_index("bathroom_id")
+        mock_db.reviews.create_index("user_id")
+    except Exception as e:
+        print(f"Warning: Could not create some indexes in test DB: {e}")
     
     # Clear collections before each test
     for collection in mock_db.list_collection_names():
@@ -136,7 +131,12 @@ def mock_review(setup_db, mock_bathroom, mock_user_id):
         "_id": ObjectId(),
         "bathroom_id": str(mock_bathroom["_id"]),
         "user_id": mock_user_id,
-        "rating": 4,
+        "ratings": {
+            "cleanliness": 4,
+            "privacy": 3,
+            "accessibility": 4
+        },
+        "best_for": "Quick stop",
         "comment": "Test review comment",
         "created_at": datetime.utcnow()
     }
@@ -144,22 +144,41 @@ def mock_review(setup_db, mock_bathroom, mock_user_id):
     return review
 
 @pytest.fixture
-def login_user(client, mock_user, setup_db):
+def login_user(client, mock_user, setup_db, app):
     """Log in the mock user."""
-    login_data = {
-        "email": "test@example.com",
-        "password": "password"
-    }
+    # Create a token directly instead of relying on the login endpoint
+    with app.app_context():
+        from flask_jwt_extended import create_access_token
+        access_token = create_access_token(identity=str(mock_user["_id"]))
     
-    # Log in the user - the password hash is already set in mock_user fixture
-    response = client.post(
-        "/api/auth/login", 
-        data=json.dumps(login_data),
-        content_type="application/json"
-    )
+    # Create a client with token in headers (more reliable than cookies for testing)
+    class AuthClient:
+        def __init__(self, client, token):
+            self.client = client
+            self.token = token
+            
+        def get(self, *args, **kwargs):
+            kwargs.setdefault('headers', {})
+            kwargs['headers']['Authorization'] = f'Bearer {self.token}'
+            return self.client.get(*args, **kwargs)
+            
+        def post(self, *args, **kwargs):
+            kwargs.setdefault('headers', {})
+            kwargs['headers']['Authorization'] = f'Bearer {self.token}'
+            return self.client.post(*args, **kwargs)
+            
+        def put(self, *args, **kwargs):
+            kwargs.setdefault('headers', {})
+            kwargs['headers']['Authorization'] = f'Bearer {self.token}'
+            return self.client.put(*args, **kwargs)
+            
+        def delete(self, *args, **kwargs):
+            kwargs.setdefault('headers', {})
+            kwargs['headers']['Authorization'] = f'Bearer {self.token}'
+            return self.client.delete(*args, **kwargs)
     
-    # Return the client with active session
-    return client
+    # Return the wrapped client
+    return AuthClient(client, access_token)
 
 @pytest.fixture
 def db(setup_db):
